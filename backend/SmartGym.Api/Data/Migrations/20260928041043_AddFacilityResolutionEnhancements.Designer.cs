@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using SmartGym.Api.Data;
@@ -11,9 +12,11 @@ using SmartGym.Api.Data;
 namespace SmartGym.Api.Data.Migrations
 {
     [DbContext(typeof(SmartGymDbContext))]
-    partial class SmartGymDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260928041043_AddFacilityResolutionEnhancements")]
+    partial class AddFacilityResolutionEnhancements
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

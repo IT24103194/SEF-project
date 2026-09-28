@@ -79,13 +79,25 @@ public enum IssueSeverity
 
 public enum FacilityIssueStatus
 {
-    Reported = 1,
-    InReview = 2,
-    Diagnosing = 3,
-    RequiresApproval = 4,
-    InRepair = 5,
-    Resolved = 6,
-    Cancelled = 7
+    SUBMITTED = 1,
+    AI_ANALYZING = 2,
+    PENDING_APPROVAL = 3,
+    APPROVED = 4,
+    VENDOR_CONTACTED = 5,
+    REPAIR_SCHEDULED = 6,
+    IN_PROGRESS = 7,
+    RESOLVED = 8,
+    REJECTED = 9,
+    REVISION_REQUIRED = 10,
+
+    // Backward-compatible aliases
+    Reported = SUBMITTED,
+    InReview = AI_ANALYZING,
+    Diagnosing = AI_ANALYZING,
+    RequiresApproval = PENDING_APPROVAL,
+    InRepair = IN_PROGRESS,
+    Resolved = RESOLVED,
+    Cancelled = REJECTED
 }
 
 public enum RepairOrderStatus

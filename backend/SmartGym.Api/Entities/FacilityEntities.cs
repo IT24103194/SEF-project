@@ -64,8 +64,12 @@ public class FacilityIssue
 
     public string Title { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
+    public string? SanitizedDescription { get; set; }
+    public string? ResolutionNotes { get; set; }
+    public string ModerationStatus { get; set; } = "Clean";
+    public string? ModerationReason { get; set; }
     public IssueSeverity Severity { get; set; } = IssueSeverity.Medium;
-    public FacilityIssueStatus Status { get; set; } = FacilityIssueStatus.Reported;
+    public FacilityIssueStatus Status { get; set; } = FacilityIssueStatus.SUBMITTED;
     public DateTime ReportedAt { get; set; } = DateTime.UtcNow;
     public DateTime? ResolvedAt { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
@@ -85,6 +89,9 @@ public class IssueImage
 
     public string ImageUrl { get; set; } = string.Empty;
     public string? ThumbnailUrl { get; set; }
+    public long? FileSizeBytes { get; set; }
+    public string? ContentType { get; set; }
+    public string? OriginalFileName { get; set; }
     public DateTime UploadedAt { get; set; } = DateTime.UtcNow;
 }
 

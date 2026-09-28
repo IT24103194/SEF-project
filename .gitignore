@@ -72,3 +72,8 @@ Thumbs.db
 .idea/
 *.swp
 *.bak
+
+# Static Uploads
+backend/SmartGym.Api/wwwroot/uploads/*
+!backend/SmartGym.Api/wwwroot/uploads/.gitkeep
+

@@ -126,6 +126,18 @@ public class FacilityIssueConfiguration : IEntityTypeConfiguration<FacilityIssue
             .IsRequired()
             .HasMaxLength(2000);
 
+        builder.Property(fi => fi.SanitizedDescription)
+            .HasMaxLength(2000);
+
+        builder.Property(fi => fi.ResolutionNotes)
+            .HasMaxLength(2000);
+
+        builder.Property(fi => fi.ModerationStatus)
+            .HasMaxLength(50);
+
+        builder.Property(fi => fi.ModerationReason)
+            .HasMaxLength(500);
+
         builder.HasIndex(fi => fi.Status);
         builder.HasIndex(fi => fi.Severity);
         builder.HasIndex(fi => fi.ReportedAt);
@@ -177,6 +189,12 @@ public class IssueImageConfiguration : IEntityTypeConfiguration<IssueImage>
 
         builder.Property(img => img.ThumbnailUrl)
             .HasMaxLength(1000);
+
+        builder.Property(img => img.ContentType)
+            .HasMaxLength(100);
+
+        builder.Property(img => img.OriginalFileName)
+            .HasMaxLength(255);
 
         builder.HasOne(img => img.FacilityIssue)
             .WithMany(fi => fi.Images)

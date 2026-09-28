@@ -47,6 +47,7 @@ public class GlobalExceptionMiddleware
             ArgumentException => (StatusCodes.Status400BadRequest, "Invalid Argument"),
             KeyNotFoundException => (StatusCodes.Status404NotFound, "Resource Not Found"),
             UnauthorizedAccessException => (StatusCodes.Status401Unauthorized, "Unauthorized"),
+            SmartGym.Api.Exceptions.ForbiddenException => (StatusCodes.Status403Forbidden, "Forbidden"),
             InvalidOperationException => (StatusCodes.Status409Conflict, "Conflict / Invalid Operation"),
             _ => (StatusCodes.Status500InternalServerError, "An unexpected error occurred while processing your request.")
         };

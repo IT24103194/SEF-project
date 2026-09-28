@@ -632,7 +632,7 @@ class _StockAdjustSheetState extends State<_StockAdjustSheet> {
 
           // Movement type dropdown
           DropdownButtonFormField<String>(
-            value: _movementType,
+            initialValue: _movementType,
             dropdownColor: const Color(0xFF111827),
             style: const TextStyle(color: Colors.white, fontSize: 13),
             decoration: const InputDecoration(

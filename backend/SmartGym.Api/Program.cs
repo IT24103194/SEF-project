@@ -50,6 +50,9 @@ builder.Services.AddScoped<DatabaseSeeder>();
 builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IInventoryService, InventoryService>();
+builder.Services.AddScoped<IContentModerationService, ContentModerationService>();
+builder.Services.AddScoped<IImageStorageService, ImageStorageService>();
+builder.Services.AddScoped<IFacilityService, FacilityService>();
 
 // 4. Configure JWT Authentication & Authorization
 var jwtSettings = builder.Configuration.GetSection(JwtSettings.SectionName).Get<JwtSettings>() ?? new JwtSettings();
@@ -215,6 +218,7 @@ app.UseSwaggerUI(c =>
 });
 
 app.UseCors("SmartGymCors");
+app.UseStaticFiles();
 
 app.UseRouting();
 

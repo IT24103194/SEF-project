@@ -84,11 +84,11 @@ class HomeScreen extends ConsumerWidget {
 
             // Facility Resolution Action Card
             _ActionTile(
-              title: 'Report Equipment Issue',
-              subtitle: 'Trigger Agentic AI failure analysis & repair tracking',
+              title: 'Equipment & Facility Issues',
+              subtitle: 'Track repairs, upload photos, and report machine issues',
               icon: Icons.build_circle_outlined,
               iconColor: const Color(0xFF06B6D4),
-              onTap: () => Navigator.of(context).pushNamed('/facility-report'),
+              onTap: () => Navigator.of(context).pushNamed('/facility-issues'),
             ),
             const SizedBox(height: 12),
 
