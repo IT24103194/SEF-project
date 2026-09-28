@@ -1,0 +1,39 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "backend", "backend", "{272AEA8A-E50C-4319-ABB8-7D0A90FD6F53}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SmartGym.Api", "backend\SmartGym.Api\SmartGym.Api.csproj", "{E56FFBFA-6A17-4525-B47A-944C2D7896D9}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{73487FDD-12D6-49A6-BFAD-BC2FC357A2B9}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "backend", "backend", "{35ACAE6C-7330-4C13-AA2A-94862E4BBB8F}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SmartGym.Api.Tests", "tests\backend\SmartGym.Api.Tests\SmartGym.Api.Tests.csproj", "{F83D9805-C84C-4E97-9C47-C190CBE887EE}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{E56FFBFA-6A17-4525-B47A-944C2D7896D9}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E56FFBFA-6A17-4525-B47A-944C2D7896D9}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E56FFBFA-6A17-4525-B47A-944C2D7896D9}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E56FFBFA-6A17-4525-B47A-944C2D7896D9}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F83D9805-C84C-4E97-9C47-C190CBE887EE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F83D9805-C84C-4E97-9C47-C190CBE887EE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F83D9805-C84C-4E97-9C47-C190CBE887EE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F83D9805-C84C-4E97-9C47-C190CBE887EE}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{E56FFBFA-6A17-4525-B47A-944C2D7896D9} = {272AEA8A-E50C-4319-ABB8-7D0A90FD6F53}
+		{35ACAE6C-7330-4C13-AA2A-94862E4BBB8F} = {73487FDD-12D6-49A6-BFAD-BC2FC357A2B9}
+		{F83D9805-C84C-4E97-9C47-C190CBE887EE} = {35ACAE6C-7330-4C13-AA2A-94862E4BBB8F}
+	EndGlobalSection
+EndGlobal
