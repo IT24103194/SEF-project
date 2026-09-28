@@ -2,6 +2,7 @@ import React from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { logout } from '../store/authSlice';
 import { Activity, ShieldCheck, User, LogOut } from 'lucide-react';
+import NotificationCenter from './notifications/NotificationCenter';
 
 export const Navbar = () => {
   const { user, role, isAuthenticated } = useSelector((state) => state.auth);
@@ -25,6 +26,8 @@ export const Navbar = () => {
           <span style={{ color: 'var(--text-secondary)' }}>System:</span>
           <span className="badge badge-success">Healthy</span>
         </div>
+
+        {isAuthenticated && <NotificationCenter />}
 
         {isAuthenticated && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>

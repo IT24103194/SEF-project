@@ -1,6 +1,8 @@
+using Microsoft.EntityFrameworkCore;
+
 namespace SmartGym.Api.DTOs.Common;
 
-public class PagedRequest
+public class PaginationParameters
 {
     private const int MaxPageSizeLimit = 100;
     private int _pageNumber = 1;
@@ -18,6 +20,56 @@ public class PagedRequest
         set => _pageSize = value > MaxPageSizeLimit ? MaxPageSizeLimit : (value < 1 ? 20 : value);
     }
 
+    public int Skip => (PageNumber - 1) * PageSize;
+    public int Take => PageSize;
+
+    public PaginationParameters() { }
+
+    public PaginationParameters(int pageNumber, int pageSize)
+    {
+        PageNumber = pageNumber;
+        PageSize = pageSize;
+    }
+}
+
+public class SortParameters
+{
+    public string? SortBy { get; set; }
+    public SortDirection Direction { get; set; } = SortDirection.Ascending;
+    public bool IsDescending => Direction == SortDirection.Descending;
+
+    public SortParameters() { }
+
+    public SortParameters(string? sortBy, SortDirection direction = SortDirection.Ascending)
+    {
+        SortBy = sortBy;
+        Direction = direction;
+    }
+
+    public static SortParameters FromString(string? sortBy, bool descending = false)
+    {
+        return new SortParameters(sortBy, descending ? SortDirection.Descending : SortDirection.Ascending);
+    }
+}
+
+public class FilterParameters
+{
+    public string FieldName { get; set; } = string.Empty;
+    public string Operator { get; set; } = "eq"; // eq, neq, gt, gte, lt, lte, contains, in
+    public string Value { get; set; } = string.Empty;
+
+    public FilterParameters() { }
+
+    public FilterParameters(string fieldName, string value, string op = "eq")
+    {
+        FieldName = fieldName;
+        Value = value;
+        Operator = op;
+    }
+}
+
+public class PagedRequest : PaginationParameters
+{
     public string? SearchTerm { get; set; }
     public string? SortBy { get; set; }
     public SortDirection SortDirection { get; set; } = SortDirection.Ascending;
@@ -29,18 +81,9 @@ public enum SortDirection
     Descending = 2
 }
 
-public class SortParam
-{
-    public string SortBy { get; set; } = string.Empty;
-    public SortDirection Direction { get; set; } = SortDirection.Ascending;
-}
-
-public class FilterParam
-{
-    public string FieldName { get; set; } = string.Empty;
-    public string Operator { get; set; } = "eq"; // eq, neq, gt, gte, lt, lte, contains, in
-    public string Value { get; set; } = string.Empty;
-}
+// Backward-compatibility aliases
+public class SortParam : SortParameters { }
+public class FilterParam : FilterParameters { }
 
 public class PagedResult<T>
 {
@@ -58,7 +101,7 @@ public class PagedResult<T>
     {
         Items = items.ToList().AsReadOnly();
         TotalCount = totalCount;
-        PageNumber = pageNumber;
+        PageNumber = pageNumber < 1 ? 1 : pageNumber;
         PageSize = pageSize > 0 ? pageSize : 10;
         TotalPages = (int)Math.Ceiling((double)TotalCount / PageSize);
         HasPreviousPage = PageNumber > 1;
@@ -68,5 +111,22 @@ public class PagedResult<T>
     public static PagedResult<T> Create(IEnumerable<T> items, int totalCount, int pageNumber, int pageSize)
     {
         return new PagedResult<T>(items, totalCount, pageNumber, pageSize);
+    }
+}
+
+public static class QueryableExtensions
+{
+    public static async Task<PagedResult<T>> ToPagedResultAsync<T>(
+        this IQueryable<T> query,
+        PaginationParameters pagination,
+        CancellationToken cancellationToken = default)
+    {
+        var totalCount = await query.CountAsync(cancellationToken);
+        var items = await query
+            .Skip(pagination.Skip)
+            .Take(pagination.Take)
+            .ToListAsync(cancellationToken);
+
+        return new PagedResult<T>(items, totalCount, pagination.PageNumber, pagination.PageSize);
     }
 }

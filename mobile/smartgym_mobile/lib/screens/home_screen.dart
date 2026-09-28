@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/auth_provider.dart';
+import '../providers/notification_provider.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -9,6 +10,7 @@ class HomeScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final authState = ref.watch(authProvider);
     final user = authState.user;
+    final unreadCount = ref.watch(notificationProvider.select((s) => s.unreadCount));
 
     return Scaffold(
       backgroundColor: const Color(0xFF0B0F19),
@@ -20,6 +22,43 @@ class HomeScreen extends ConsumerWidget {
           style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18),
         ),
         actions: [
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.notifications_outlined),
+                tooltip: 'Notifications',
+                onPressed: () {
+                  Navigator.of(context).pushNamed('/notifications');
+                },
+              ),
+              if (unreadCount > 0)
+                Positioned(
+                  top: 10,
+                  right: 10,
+                  child: Container(
+                    padding: const EdgeInsets.all(3),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFEF4444),
+                      shape: BoxShape.circle,
+                    ),
+                    constraints: const BoxConstraints(
+                      minWidth: 16,
+                      minHeight: 16,
+                    ),
+                    child: Text(
+                      '$unreadCount',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
           IconButton(
             icon: const Icon(Icons.logout),
             tooltip: 'Sign Out',
@@ -119,6 +158,16 @@ class HomeScreen extends ConsumerWidget {
               icon: Icons.inventory_2_outlined,
               iconColor: const Color(0xFFF59E0B),
               onTap: () => Navigator.of(context).pushNamed('/inventory'),
+            ),
+            const SizedBox(height: 12),
+
+            // Notifications & Status Center Action Card
+            _ActionTile(
+              title: 'Notifications & Alerts',
+              subtitle: 'Class bookings, facility tickets & membership notices',
+              icon: Icons.notifications_active_outlined,
+              iconColor: const Color(0xFFEC4899),
+              onTap: () => Navigator.of(context).pushNamed('/notifications'),
             ),
           ],
         ),
