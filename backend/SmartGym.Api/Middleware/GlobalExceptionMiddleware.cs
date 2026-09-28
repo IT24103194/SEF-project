@@ -6,7 +6,7 @@ namespace SmartGym.Api.Middleware;
 
 /// <summary>
 /// Global exception handling middleware that converts unhandled exceptions
-/// into RFC 7807 ProblemDetails JSON responses.
+/// into RFC 7807 ProblemDetails JSON responses with correlation tracking.
 /// </summary>
 public class GlobalExceptionMiddleware
 {
@@ -29,27 +29,46 @@ public class GlobalExceptionMiddleware
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Unhandled exception occurred: {Message}", ex.Message);
-            await HandleExceptionAsync(context, ex);
+            var correlationId = context.Items[CorrelationIdMiddleware.CorrelationIdItemKey]?.ToString()
+                ?? context.TraceIdentifier;
+
+            _logger.LogError(ex, "[{CorrelationId}] Unhandled exception occurred: {Message}", correlationId, ex.Message);
+            await HandleExceptionAsync(context, ex, correlationId);
         }
     }
 
-    private Task HandleExceptionAsync(HttpContext context, Exception exception)
+    private Task HandleExceptionAsync(HttpContext context, Exception exception, string correlationId)
     {
         context.Response.ContentType = "application/problem+json";
-        context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
+
+        var (statusCode, title) = exception switch
+        {
+            BadHttpRequestException => (StatusCodes.Status400BadRequest, "Bad Request"),
+            ArgumentException => (StatusCodes.Status400BadRequest, "Invalid Argument"),
+            KeyNotFoundException => (StatusCodes.Status404NotFound, "Resource Not Found"),
+            UnauthorizedAccessException => (StatusCodes.Status401Unauthorized, "Unauthorized"),
+            InvalidOperationException => (StatusCodes.Status409Conflict, "Conflict / Invalid Operation"),
+            _ => (StatusCodes.Status500InternalServerError, "An unexpected error occurred while processing your request.")
+        };
+
+        context.Response.StatusCode = statusCode;
 
         var problemDetails = new ProblemDetails
         {
-            Status = (int)HttpStatusCode.InternalServerError,
-            Title = "An unexpected error occurred while processing your request.",
-            Detail = _env.IsDevelopment() ? exception.ToString() : exception.Message,
+            Status = statusCode,
+            Title = title,
+            Detail = _env.IsDevelopment() ? $"{exception.Message} ({exception.GetType().Name})" : exception.Message,
             Instance = context.Request.Path
         };
 
+        problemDetails.Extensions["correlationId"] = correlationId;
+        problemDetails.Extensions["traceId"] = context.TraceIdentifier;
+        problemDetails.Extensions["timestamp"] = DateTime.UtcNow;
+
         var json = JsonSerializer.Serialize(problemDetails, new JsonSerializerOptions
         {
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            WriteIndented = false
         });
 
         return context.Response.WriteAsync(json);
