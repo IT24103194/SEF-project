@@ -54,6 +54,7 @@ builder.Services.AddScoped<IContentModerationService, ContentModerationService>(
 builder.Services.AddScoped<IImageStorageService, ImageStorageService>();
 builder.Services.AddScoped<IFacilityService, FacilityService>();
 builder.Services.AddScoped<IClassManagementService, ClassManagementService>();
+builder.Services.AddScoped<IMembershipService, MembershipService>();
 
 // 4. Configure JWT Authentication & Authorization
 var jwtSettings = builder.Configuration.GetSection(JwtSettings.SectionName).Get<JwtSettings>() ?? new JwtSettings();

@@ -82,6 +82,16 @@ class HomeScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 12),
 
+            // Membership & Goal Tracking Action Card
+            _ActionTile(
+              title: 'My Membership & Fitness Goals',
+              subtitle: 'Check validity, renew plans & track workout milestones',
+              icon: Icons.card_membership_outlined,
+              iconColor: const Color(0xFF6366F1),
+              onTap: () => Navigator.of(context).pushNamed('/membership'),
+            ),
+            const SizedBox(height: 12),
+
             // Facility Resolution Action Card
             _ActionTile(
               title: 'Equipment & Facility Issues',

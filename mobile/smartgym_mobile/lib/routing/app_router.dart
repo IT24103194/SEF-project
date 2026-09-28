@@ -5,6 +5,7 @@ import '../screens/facility_report_screen.dart';
 import '../screens/facility_issue_list_screen.dart';
 import '../screens/classes_screen.dart';
 import '../screens/inventory_screen.dart';
+import '../screens/membership_screen.dart';
 
 class AppRouter {
   static const String initialRoute = '/login';
@@ -16,5 +17,6 @@ class AppRouter {
         '/facility-issues': (context) => const FacilityIssueListScreen(),
         '/classes': (context) => const ClassesScreen(),
         '/inventory': (context) => const InventoryScreen(),
+        '/membership': (context) => const MembershipScreen(),
       };
 }
