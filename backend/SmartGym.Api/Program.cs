@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi.Models;
 using SmartGym.Api.Configuration;
 using SmartGym.Api.Middleware;
@@ -9,9 +10,17 @@ builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection(JwtSett
 builder.Services.Configure<AiServiceSettings>(builder.Configuration.GetSection(AiServiceSettings.SectionName));
 builder.Services.Configure<EmailSettings>(builder.Configuration.GetSection(EmailSettings.SectionName));
 
-// 2. Add MVC Controllers & Health Checks
+// 2. Add MVC Controllers, Health Checks & Database Context
 builder.Services.AddControllers();
 builder.Services.AddHealthChecks();
+
+builder.Services.AddDbContext<SmartGym.Api.Data.SmartGymDbContext>(options =>
+{
+    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection"));
+});
+
+builder.Services.AddScoped<SmartGym.Api.Data.ITransactionService, SmartGym.Api.Data.TransactionService>();
+builder.Services.AddScoped<SmartGym.Api.Data.DatabaseSeeder>();
 
 // 3. Configure CORS Policy
 var corsOrigins = builder.Configuration.GetSection("CorsOrigins").Get<string[]>() ?? new[]
@@ -95,6 +104,22 @@ app.MapControllers();
 
 // Root redirect to Swagger UI
 app.MapGet("/", () => Results.Redirect("/swagger"));
+
+// 6. Database Seeding in Development
+if (app.Environment.IsDevelopment() && !app.Environment.EnvironmentName.Equals("Testing", StringComparison.OrdinalIgnoreCase))
+{
+    using var scope = app.Services.CreateScope();
+    var seeder = scope.ServiceProvider.GetRequiredService<SmartGym.Api.Data.DatabaseSeeder>();
+    try
+    {
+        await seeder.SeedAsync();
+    }
+    catch (Exception ex)
+    {
+        var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+        logger.LogWarning(ex, "Database seeding could not complete automatically on startup.");
+    }
+}
 
 app.Run();
 
