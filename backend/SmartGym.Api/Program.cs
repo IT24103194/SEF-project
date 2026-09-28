@@ -1,44 +1,102 @@
+using Microsoft.OpenApi.Models;
+using SmartGym.Api.Configuration;
+using SmartGym.Api.Middleware;
+
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
+// 1. Add Configuration Options
+builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection(JwtSettings.SectionName));
+builder.Services.Configure<AiServiceSettings>(builder.Configuration.GetSection(AiServiceSettings.SectionName));
+builder.Services.Configure<EmailSettings>(builder.Configuration.GetSection(EmailSettings.SectionName));
+
+// 2. Add MVC Controllers & Health Checks
+builder.Services.AddControllers();
+builder.Services.AddHealthChecks();
+
+// 3. Configure CORS Policy
+var corsOrigins = builder.Configuration.GetSection("CorsOrigins").Get<string[]>() ?? new[]
+{
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:5173"
+};
+
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("SmartGymCors", policy =>
+    {
+        policy.WithOrigins(corsOrigins)
+              .AllowAnyHeader()
+              .AllowAnyMethod()
+              .AllowCredentials();
+    });
+});
+
+// 4. Configure Swagger / OpenAPI
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(options =>
+{
+    options.SwaggerDoc("v1", new OpenApiInfo
+    {
+        Title = "SmartGym API",
+        Version = "v1",
+        Description = "Authoritative REST API for SmartGym — Integrated Gym, Supplement, Membership & Facility Management System with Agentic AI."
+    });
+
+    // JWT Bearer Authentication Definition
+    options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Name = "Authorization",
+        Type = SecuritySchemeType.Http,
+        Scheme = "Bearer",
+        BearerFormat = "JWT",
+        In = ParameterLocation.Header,
+        Description = "Enter your JWT token directly (e.g. eyJhbGciOi...)"
+    });
+
+    options.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        {
+            new OpenApiSecurityScheme
+            {
+                Reference = new OpenApiReference
+                {
+                    Type = ReferenceType.SecurityScheme,
+                    Id = "Bearer"
+                }
+            },
+            Array.Empty<string>()
+        }
+    });
+});
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
+// 5. Global Middleware Pipeline
+app.UseMiddleware<GlobalExceptionMiddleware>();
+app.UseMiddleware<RequestLoggingMiddleware>();
 
-app.UseHttpsRedirection();
-
-var summaries = new[]
+// Enable Swagger in all environments for academic evaluation & viva demonstration
+app.UseSwagger();
+app.UseSwaggerUI(c =>
 {
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-};
+    c.SwaggerEndpoint("/swagger/v1/swagger.json", "SmartGym API v1");
+    c.RoutePrefix = "swagger";
+});
 
-app.MapGet("/weatherforecast", () =>
-{
-    var forecast =  Enumerable.Range(1, 5).Select(index =>
-        new WeatherForecast
-        (
-            DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-            Random.Shared.Next(-20, 55),
-            summaries[Random.Shared.Next(summaries.Length)]
-        ))
-        .ToArray();
-    return forecast;
-})
-.WithName("GetWeatherForecast")
-.WithOpenApi();
+app.UseCors("SmartGymCors");
+
+app.UseRouting();
+
+// Map Health Checks & Controllers
+app.MapHealthChecks("/health");
+app.MapControllers();
+
+// Root redirect to Swagger UI
+app.MapGet("/", () => Results.Redirect("/swagger"));
 
 app.Run();
 
-record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
-}
+// Expose Program for WebApplicationFactory in integration tests
+public partial class Program { }
