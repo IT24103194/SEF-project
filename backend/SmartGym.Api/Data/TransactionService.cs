@@ -130,7 +130,7 @@ public class TransactionService : ITransactionService
             var newQuantity = item.QuantityInStock + quantityChange;
             if (newQuantity < 0)
             {
-                return (false, $"Insufficient stock for product '{item.Product.Name}'. Current: {item.QuantityInStock}, Requested adjustment: {quantityChange}.", item);
+                return (false, $"Stock cannot become negative. Insufficient stock for product '{item.Product.Name}'. Current: {item.QuantityInStock}, Requested adjustment: {quantityChange}.", item);
             }
 
             item.QuantityInStock = newQuantity;

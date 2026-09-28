@@ -49,6 +49,7 @@ builder.Services.AddScoped<ITransactionService, TransactionService>();
 builder.Services.AddScoped<DatabaseSeeder>();
 builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IInventoryService, InventoryService>();
 
 // 4. Configure JWT Authentication & Authorization
 var jwtSettings = builder.Configuration.GetSection(JwtSettings.SectionName).Get<JwtSettings>() ?? new JwtSettings();

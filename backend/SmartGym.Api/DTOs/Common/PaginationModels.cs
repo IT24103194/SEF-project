@@ -44,20 +44,25 @@ public class FilterParam
 
 public class PagedResult<T>
 {
-    public IReadOnlyList<T> Items { get; }
-    public int TotalCount { get; }
-    public int PageNumber { get; }
-    public int PageSize { get; }
-    public int TotalPages => (int)Math.Ceiling((double)TotalCount / PageSize);
-    public bool HasPreviousPage => PageNumber > 1;
-    public bool HasNextPage => PageNumber < TotalPages;
+    public IReadOnlyList<T> Items { get; set; } = Array.Empty<T>();
+    public int TotalCount { get; set; }
+    public int PageNumber { get; set; }
+    public int PageSize { get; set; }
+    public int TotalPages { get; set; }
+    public bool HasPreviousPage { get; set; }
+    public bool HasNextPage { get; set; }
+
+    public PagedResult() { }
 
     public PagedResult(IEnumerable<T> items, int totalCount, int pageNumber, int pageSize)
     {
         Items = items.ToList().AsReadOnly();
         TotalCount = totalCount;
         PageNumber = pageNumber;
-        PageSize = pageSize;
+        PageSize = pageSize > 0 ? pageSize : 10;
+        TotalPages = (int)Math.Ceiling((double)TotalCount / PageSize);
+        HasPreviousPage = PageNumber > 1;
+        HasNextPage = PageNumber < TotalPages;
     }
 
     public static PagedResult<T> Create(IEnumerable<T> items, int totalCount, int pageNumber, int pageSize)
