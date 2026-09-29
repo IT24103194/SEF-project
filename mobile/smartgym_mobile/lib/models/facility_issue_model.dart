@@ -164,7 +164,9 @@ class FacilityIssueModel {
   });
 
   factory FacilityIssueModel.fromJson(Map<String, dynamic> json) {
-    var rawImages = json['images'] as List<dynamic>? ?? [];
+    var rawImages = json['images'] as List<dynamic>? ??
+        json['attachments'] as List<dynamic>? ??
+        [];
     return FacilityIssueModel(
       id: json['id']?.toString() ?? '',
       reportedByMemberId: json['reportedByMemberId']?.toString() ?? '',

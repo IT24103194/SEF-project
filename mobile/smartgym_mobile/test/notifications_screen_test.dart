@@ -72,7 +72,7 @@ void main() {
   });
 
   testWidgets('NotificationsScreen displays empty view when no notifications exist', (tester) async {
-    final state = const NotificationState(
+    const state = NotificationState(
       isLoading: false,
       notifications: [],
       unreadCount: 0,

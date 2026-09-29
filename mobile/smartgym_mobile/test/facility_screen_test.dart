@@ -54,14 +54,14 @@ class MockFacilityApiService extends FacilityApiService {
 }
 
 void main() {
-  final sampleLocation = LocationModel(
+  const sampleLocation = LocationModel(
     id: 'loc-1',
     name: 'Cardio Zone A',
     floor: 'Ground Floor',
     description: 'Treadmills and rowers',
   );
 
-  final sampleEquipment = EquipmentModel(
+  const sampleEquipment = EquipmentModel(
     id: 'eq-1',
     locationId: 'loc-1',
     locationName: 'Cardio Zone A',
