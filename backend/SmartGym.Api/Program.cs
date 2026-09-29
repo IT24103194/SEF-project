@@ -58,6 +58,8 @@ builder.Services.AddScoped<IMembershipService, MembershipService>();
 builder.Services.AddScoped<IAuditService, AuditService>();
 builder.Services.AddScoped<IReportingService, ReportingService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddHttpClient<IAiServiceClient, AiServiceClient>();
 
 // 4. Configure JWT Authentication & Authorization
 var jwtSettings = builder.Configuration.GetSection(JwtSettings.SectionName).Get<JwtSettings>() ?? new JwtSettings();
