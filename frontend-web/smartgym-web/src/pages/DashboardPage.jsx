@@ -17,16 +17,23 @@ import {
   Activity,
   BarChart3,
   RefreshCw,
-  ShieldCheck
+  ShieldCheck,
+  Bell,
+  FileText,
+  CheckSquare
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import reportsApi from '../services/reportsApi';
+import notificationsApi from '../services/notificationsApi';
+import approvalsApi from '../services/approvalsApi';
 
 export const DashboardPage = () => {
   const dispatch = useDispatch();
   const { info, status } = useSelector((state) => state.system);
 
   const [dashboardData, setDashboardData] = useState(null);
+  const [notificationSummary, setNotificationSummary] = useState(null);
+  const [pendingApprovals, setPendingApprovals] = useState([]);
   const [loadingReports, setLoadingReports] = useState(false);
   const [reportError, setReportError] = useState('');
 
@@ -34,11 +41,30 @@ export const DashboardPage = () => {
     try {
       setLoadingReports(true);
       setReportError('');
-      const data = await reportsApi.getExecutiveDashboard();
-      setDashboardData(data);
+      const [dashData, notifData, approvalsData] = await Promise.allSettled([
+        reportsApi.getExecutiveDashboard(),
+        notificationsApi.getSummary ? notificationsApi.getSummary() : Promise.resolve(null),
+        approvalsApi.getApprovals ? approvalsApi.getApprovals({ status: 'PendingApproval', pageSize: 5 }) : Promise.resolve({ items: [] })
+      ]);
+
+      if (dashData.status === 'fulfilled') {
+        setDashboardData(dashData.value);
+      } else {
+        console.error('Failed to load executive dashboard reports', dashData.reason);
+        setReportError('Unable to load live analytics report.');
+      }
+
+      if (notifData.status === 'fulfilled' && notifData.value) {
+        setNotificationSummary(notifData.value);
+      }
+
+      if (approvalsData.status === 'fulfilled' && approvalsData.value) {
+        const items = approvalsData.value.items || approvalsData.value.Items || [];
+        setPendingApprovals(items);
+      }
     } catch (err) {
-      console.error('Failed to load executive dashboard reports', err);
-      setReportError('Unable to load live analytics report.');
+      console.error('Failed to load dashboard data', err);
+      setReportError('Unable to load live dashboard data.');
     } finally {
       setLoadingReports(false);
     }
@@ -61,7 +87,7 @@ export const DashboardPage = () => {
       title: 'Facility Resolution & AI',
       desc: 'LangGraph multi-agent triage, HITL financial gate (Rs. 25,000)',
       icon: Wrench,
-      path: '/facility',
+      path: '/facility-issues',
       color: 'var(--primary)'
     },
     {
@@ -77,6 +103,34 @@ export const DashboardPage = () => {
       icon: Users,
       path: '/memberships',
       color: 'var(--accent-amber)'
+    },
+    {
+      title: 'Agentic AI Approvals Queue',
+      desc: 'Supervise repair orders and AI workflows exceeding thresholds',
+      icon: CheckSquare,
+      path: '/approvals',
+      color: '#f59e0b'
+    },
+    {
+      title: 'Executive Reports & Analytics',
+      desc: 'Deep-dive business intelligence across all 5 operational domains',
+      icon: BarChart3,
+      path: '/reports',
+      color: '#8b5cf6'
+    },
+    {
+      title: 'AI Workflows Trace Inspector',
+      desc: 'Full diagnostic audit logs for LangGraph and agent tool runs',
+      icon: Cpu,
+      path: '/ai-workflows',
+      color: '#06b6d4'
+    },
+    {
+      title: 'Notifications & Event Triggers',
+      desc: 'Automated alerts for low stock, renewals, and class bookings',
+      icon: Bell,
+      path: '/notifications',
+      color: '#ec4899'
     },
   ];
 
@@ -234,6 +288,97 @@ export const DashboardPage = () => {
           </div>
         </div>
       )}
+
+      {/* Notifications & System Broadcasts Banner */}
+      {notificationSummary && (notificationSummary.unreadCount > 0 || notificationSummary.criticalCount > 0) && (
+        <div className="glass-card" style={{ padding: '1.25rem 1.5rem', marginBottom: '2rem', borderLeft: '4px solid #ec4899', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+            <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'rgba(236, 72, 153, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Bell size={20} color="#ec4899" />
+            </div>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: '1rem' }}>
+                System Alerts: {notificationSummary.unreadCount} Unread Notifications
+              </div>
+              <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                {notificationSummary.criticalCount > 0 ? `${notificationSummary.criticalCount} high-priority alerts require attention.` : 'Operational events updated across inventory and memberships.'}
+              </div>
+            </div>
+          </div>
+          <Link to="/notifications" className="btn-secondary" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem' }}>
+            View Notification Center <ArrowUpRight size={14} />
+          </Link>
+        </div>
+      )}
+
+      {/* Agentic AI Approval Monitoring & Human-in-the-Loop Gate */}
+      <div className="glass-card" style={{ padding: '1.75rem', marginBottom: '2rem', borderTop: '2px solid #f59e0b' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '1rem' }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+              <ShieldCheck size={22} color="#f59e0b" />
+              <h2 style={{ fontSize: '1.2rem', fontWeight: 800, margin: 0 }}>
+                Agentic AI Approval Monitoring & Safety Gates
+              </h2>
+            </div>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', margin: '0.25rem 0 0 0' }}>
+              Supervising LangGraph automated actions and financial thresholds (&gt; Rs. 25,000 / $25,000).
+            </p>
+          </div>
+          <Link to="/approvals" className="btn-secondary" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem' }}>
+            Open Approvals Queue <ArrowUpRight size={14} />
+          </Link>
+        </div>
+
+        {pendingApprovals.length > 0 ? (
+          <div style={{ overflowX: 'auto' }}>
+            <table className="data-table" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.875rem' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-secondary)' }}>
+                  <th style={{ padding: '0.75rem' }}>Order / ID</th>
+                  <th style={{ padding: '0.75rem' }}>Equipment / Context</th>
+                  <th style={{ padding: '0.75rem' }}>Estimated Cost</th>
+                  <th style={{ padding: '0.75rem' }}>Threshold Gate</th>
+                  <th style={{ padding: '0.75rem' }}>Status</th>
+                  <th style={{ padding: '0.75rem', textAlign: 'right' }}>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pendingApprovals.map((item) => (
+                  <tr key={item.id || item.Id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                    <td style={{ padding: '0.75rem', fontWeight: 600 }}>{item.orderNumber || item.OrderNumber || 'RO-PENDING'}</td>
+                    <td style={{ padding: '0.75rem' }}>{item.equipmentName || item.EquipmentName || 'Facility Equipment'}</td>
+                    <td style={{ padding: '0.75rem', fontWeight: 700, color: '#f59e0b' }}>
+                      ${(item.estimatedCost || item.EstimatedCost || 0).toLocaleString()}
+                    </td>
+                    <td style={{ padding: '0.75rem', color: 'var(--text-secondary)' }}>
+                      ${(item.approvalThreshold || item.ApprovalThreshold || 25000).toLocaleString()} (HITL)
+                    </td>
+                    <td style={{ padding: '0.75rem' }}>
+                      <span className="badge badge-warning">Pending Review</span>
+                    </td>
+                    <td style={{ padding: '0.75rem', textAlign: 'right' }}>
+                      <Link to="/approvals" className="btn-secondary" style={{ padding: '0.35rem 0.75rem', fontSize: '0.8rem', textDecoration: 'none' }}>
+                        Review
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div style={{ padding: '1.5rem', background: 'rgba(255,255,255,0.02)', borderRadius: 'var(--radius-sm)', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+            <CheckCircle size={24} color="#10b981" />
+            <div>
+              <div style={{ fontWeight: 600, fontSize: '0.95rem' }}>All Agentic AI Operations Safe & Autonomous</div>
+              <div style={{ fontSize: '0.825rem', color: 'var(--text-secondary)' }}>
+                Zero pending approval escalations. All facility triage, reorders, and repair quotes are within authorized thresholds.
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Backend & Diagnostics */}
       <div className="glass-card" style={{ padding: '1.5rem', marginBottom: '2rem' }}>

@@ -6,6 +6,8 @@ import { configureStore } from '@reduxjs/toolkit';
 import { BrowserRouter } from 'react-router-dom';
 import DashboardPage from '../DashboardPage';
 import reportsApi from '../../services/reportsApi';
+import notificationsApi from '../../services/notificationsApi';
+import approvalsApi from '../../services/approvalsApi';
 import systemReducer from '../../store/systemSlice';
 import authReducer from '../../store/authSlice';
 
@@ -18,6 +20,25 @@ vi.mock('../../services/reportsApi', () => {
       getInventoryReport: vi.fn(),
       getFacilityReport: vi.fn(),
       getAiReport: vi.fn(),
+    },
+  };
+});
+
+vi.mock('../../services/notificationsApi', () => {
+  return {
+    default: {
+      getSummary: vi.fn(),
+      getUnreadCount: vi.fn(),
+      getNotifications: vi.fn(),
+    },
+  };
+});
+
+vi.mock('../../services/approvalsApi', () => {
+  return {
+    default: {
+      getApprovals: vi.fn(),
+      submitDecision: vi.fn(),
     },
   };
 });
@@ -81,6 +102,19 @@ describe('DashboardPage Component', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     reportsApi.getExecutiveDashboard.mockResolvedValue(mockExecutiveDashboard);
+    notificationsApi.getSummary.mockResolvedValue({ unreadCount: 2, criticalCount: 1 });
+    approvalsApi.getApprovals.mockResolvedValue({
+      items: [
+        {
+          id: 'test-approval-1',
+          orderNumber: 'RO-1004',
+          equipmentName: 'Treadmill Motor Assembly',
+          estimatedCost: 32000,
+          approvalThreshold: 25000,
+          decision: 'Pending'
+        }
+      ]
+    });
 
     store = configureStore({
       reducer: {
@@ -141,5 +175,22 @@ describe('DashboardPage Component', () => {
     expect(screen.getByText('3')).toBeTruthy(); // Low stock alert
     expect(screen.getByText('Facility & Repairs Status')).toBeTruthy();
     expect(screen.getByText('AI Agentic Workflows')).toBeTruthy();
+  });
+
+  it('displays Agentic AI approval monitoring and notifications banner', async () => {
+    render(
+      <Provider store={store}>
+        <BrowserRouter>
+          <DashboardPage />
+        </BrowserRouter>
+      </Provider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText(/Agentic AI Approval Monitoring & Safety Gates/i)).toBeTruthy();
+      expect(screen.getByText('RO-1004')).toBeTruthy();
+      expect(screen.getByText('$32,000')).toBeTruthy();
+      expect(screen.getByText(/System Alerts: 2 Unread Notifications/i)).toBeTruthy();
+    });
   });
 });

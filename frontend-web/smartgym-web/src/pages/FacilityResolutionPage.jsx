@@ -11,8 +11,8 @@ import RepairOrderModal from '../components/facility/RepairOrderModal';
 import EquipmentHistoryModal from '../components/facility/EquipmentHistoryModal';
 import FeedbackResponseModal from '../components/facility/FeedbackResponseModal';
 
-export const FacilityResolutionPage = () => {
-  const [activeTab, setActiveTab] = useState('issues'); // issues, equipment, locations, repairs, feedback
+export const FacilityResolutionPage = ({ defaultTab = 'issues' }) => {
+  const [activeTab, setActiveTab] = useState(defaultTab); // issues, equipment, locations, repairs, feedback
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 

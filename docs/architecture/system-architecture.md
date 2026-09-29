@@ -1,6 +1,7 @@
 # SmartGym System Architecture & Component Topology
 
-## 1. High-Level Architectural Diagram
+
+0## 1. High-Level Architectural Diagram
 
 ```mermaid
 graph TD

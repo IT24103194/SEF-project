@@ -7,6 +7,8 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'jsdom',
+    pool: 'forks',
+    isolate: true,
   },
   server: {
     port: 3000,
