@@ -9,6 +9,13 @@ from smartgym_ai.models.workflow_models import (
     WorkflowCancelRequest,
     WorkflowState,
 )
+from smartgym_ai.models.planner_models import (
+    PlannerInput,
+    PlannedStep,
+    PlannerOutput,
+    SupportedAgent,
+    normalize_agent_name,
+)
 
 __all__ = [
     "WorkflowStatus",
@@ -20,4 +27,9 @@ __all__ = [
     "WorkflowResumeRequest",
     "WorkflowCancelRequest",
     "WorkflowState",
+    "PlannerInput",
+    "PlannedStep",
+    "PlannerOutput",
+    "SupportedAgent",
+    "normalize_agent_name",
 ]

@@ -12,6 +12,9 @@ class Settings(BaseSettings):
     # Governance & HITL Gates
     AI_APPROVAL_COST_THRESHOLD: float = 25000.0  # LKR (Rs.)
 
+    # Database Persistence (PostgreSQL)
+    DATABASE_URL: Optional[str] = "postgresql://postgres:1234@localhost:5432/smartgym"
+
     # LLM Provider Configuration
     LLM_PROVIDER: str = "mock"  # mock, openai, gemini, etc.
     LLM_MODEL: str = "gpt-4o"

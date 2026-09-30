@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 
 class WorkflowStatus(str, Enum):
     Initiated = "Initiated"
+    Planning = "Planning"
     Running = "Running"
     Executing = "Executing"
     AwaitingApproval = "AwaitingApproval"

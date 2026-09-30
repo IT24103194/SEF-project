@@ -55,7 +55,7 @@ class MockLLMClient(ILLMClient):
         """Helper to enqueue a dict serialized as JSON."""
         self.queued_responses.append(json.dumps(data))
 
-    async def _execute_raw_call(self, messages: list[dict[str, str]]) -> str:
+    async def _execute_raw_call(self, messages: list[dict[str, str]], schema: Optional[Type[Any]] = None) -> str:
         self.call_count += 1
         self.history.append(messages)
         self.total_tokens_used += 150
@@ -72,9 +72,99 @@ class MockLLMClient(ILLMClient):
             raise self.failure_error or RuntimeError("Mock client simulated error.")
 
         if self.queued_responses:
-            return self.queued_responses.pop(0)
+            # Check if an element in queue matches the requested schema
+            for i, resp in enumerate(self.queued_responses):
+                try:
+                    parsed = json.loads(resp)
+                    if isinstance(parsed, dict):
+                        if schema and getattr(schema, "__name__", "") == "PlannerOutput":
+                            if "steps" in parsed or "objective" in parsed:
+                                return self.queued_responses.pop(i)
+                        elif schema and getattr(schema, "__name__", "") == "DiagnosisOutputSchema":
+                            if "estimated_cost" in parsed and ("diagnosis_summary" in parsed or "diagnosis" in parsed):
+                                return self.queued_responses.pop(i)
+                except Exception:
+                    pass
+            # If no schema-specific match, pop front if no schema was required
+            if not schema:
+                return self.queued_responses.pop(0)
 
-        # Default fallback response
+        # Schema-specific default mock responses
+        if schema and getattr(schema, "__name__", "") == "PlannerOutput":
+            return json.dumps({
+                "objective": "Resolve gym facility equipment issue",
+                "plan_id": "11111111-1111-1111-1111-111111111111",
+                "steps": [
+                    {
+                        "step_order": 1,
+                        "step_name": "Validate facility issue",
+                        "assigned_agent": "SafetyValidationAgent",
+                        "reason": "Verify equipment safety, physical risk factors, and member impact.",
+                        "approval_required": False
+                    },
+                    {
+                        "step_order": 2,
+                        "step_name": "Analyze equipment history",
+                        "assigned_agent": "DomainAnalysisAgent",
+                        "reason": "Review historical telemetry, past repairs, and manufacturer spec sheets.",
+                        "approval_required": False
+                    },
+                    {
+                        "step_order": 3,
+                        "step_name": "Check relevant inventory",
+                        "assigned_agent": "InventoryAgent",
+                        "reason": "Verify if replacement drive belt or bearings are in gym stock.",
+                        "approval_required": False
+                    },
+                    {
+                        "step_order": 4,
+                        "step_name": "Identify suitable supplier",
+                        "assigned_agent": "SupplierAgent",
+                        "reason": "Source OEM parts with guaranteed dispatch window if out of stock.",
+                        "approval_required": False
+                    },
+                    {
+                        "step_order": 5,
+                        "step_name": "Prepare repair proposal",
+                        "assigned_agent": "ProposalAgent",
+                        "reason": "Draft itemized parts and technician labor cost estimate.",
+                        "approval_required": False
+                    },
+                    {
+                        "step_order": 6,
+                        "step_name": "Validate proposal",
+                        "assigned_agent": "SafetyValidationAgent",
+                        "reason": "Ensure quote adheres to facility maintenance budget rules.",
+                        "approval_required": False
+                    },
+                    {
+                        "step_order": 7,
+                        "step_name": "Request authorization",
+                        "assigned_agent": "ApprovalGateAgent",
+                        "reason": "Escalate to manager if cost exceeds 25,000 LKR approval threshold.",
+                        "approval_required": False
+                    },
+                    {
+                        "step_order": 8,
+                        "step_name": "Execute approved action",
+                        "assigned_agent": "ActionExecutionAgent",
+                        "reason": "Dispatch certified technician and install verified replacement components.",
+                        "approval_required": False
+                    },
+                    {
+                        "step_order": 9,
+                        "step_name": "Update ticket",
+                        "assigned_agent": "TicketUpdateAgent",
+                        "reason": "Close facility issue with timestamped audit notes and notify staff.",
+                        "approval_required": False
+                    }
+                ],
+                "assigned_agent": "SafetyValidationAgent",
+                "reason": "Standard 9-step facility repair lifecycle with safety check and authorization gate.",
+                "approval_required": False
+            })
+
+        # Default fallback response for diagnosis
         return json.dumps({
             "diagnosis_summary": "Belt misalignment causing friction noise on treadmill motor pulley.",
             "diagnosis": "Belt misalignment causing friction noise on treadmill motor pulley.",
@@ -90,10 +180,11 @@ class MockLLMClient(ILLMClient):
         messages: list[dict[str, str]],
         temperature: float = 0.2,
         max_tokens: int = 2048,
+        schema: Optional[Type[Any]] = None,
         **kwargs: Any
     ) -> str:
         return await TimeoutHandler.execute_with_timeout(
-            self._execute_raw_call(messages),
+            self._execute_raw_call(messages, schema=schema),
             timeout_seconds=self.timeout_seconds,
             operation_name="MockLLMClient.generate"
         )
@@ -110,7 +201,7 @@ class MockLLMClient(ILLMClient):
         conversation = list(messages)
 
         async def _attempt_call():
-            raw_text = await self.generate(conversation, temperature=temperature, max_tokens=max_tokens, **kwargs)
+            raw_text = await self.generate(conversation, temperature=temperature, max_tokens=max_tokens, schema=schema, **kwargs)
             try:
                 return SchemaValidator.parse_and_validate(raw_text, schema)
             except Exception as validation_err:
