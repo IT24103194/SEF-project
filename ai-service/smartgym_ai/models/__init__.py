@@ -25,6 +25,12 @@ from smartgym_ai.models.domain_models import (
     DomainAnalysisInput,
     DomainAnalysisOutput,
 )
+from smartgym_ai.models.action_models import (
+    ApprovalStatus,
+    ApprovalAction,
+    ActionAgentInput,
+    ActionAgentOutput,
+)
 
 __all__ = [
     "WorkflowStatus",
@@ -46,4 +52,8 @@ __all__ = [
     "ContentModerationRecord",
     "DomainAnalysisInput",
     "DomainAnalysisOutput",
+    "ApprovalStatus",
+    "ApprovalAction",
+    "ActionAgentInput",
+    "ActionAgentOutput",
 ]

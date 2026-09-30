@@ -78,7 +78,8 @@ public class DatabaseModelTests : IClassFixture<WebApplicationFactory<Program>>
         // Assert - Maintenance & AI Workflow
         var issues = await db.FacilityIssues.Include(fi => fi.AIWorkflow).ThenInclude(w => w!.Steps).ToListAsync();
         Assert.NotEmpty(issues);
-        var issueWithAi = issues.FirstOrDefault(i => i.AIWorkflow != null);
+        var issueWithAi = issues.FirstOrDefault(i => i.AIWorkflow != null && i.AIWorkflow.Steps.Any()) 
+            ?? issues.FirstOrDefault(i => i.AIWorkflow != null);
         Assert.NotNull(issueWithAi);
         Assert.NotNull(issueWithAi.AIWorkflow);
         Assert.Equal("gemini-1.5-pro", issueWithAi.AIWorkflow.ModelIdentifier);

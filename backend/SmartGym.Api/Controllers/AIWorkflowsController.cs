@@ -1,11 +1,21 @@
+using System.Security.Claims;
+using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using SmartGym.Api.Authorization;
 using SmartGym.Api.Data;
+using SmartGym.Api.DTOs.AI;
 using SmartGym.Api.DTOs.Common;
 using SmartGym.Api.Entities;
+using SmartGym.Api.Services;
 
 namespace SmartGym.Api.Controllers;
+
+public class WorkflowApprovalDecisionRequest
+{
+    public string? Comments { get; set; }
+}
 
 public class AIWorkflowListDto
 {
@@ -67,6 +77,16 @@ public class AIValidationResultDto
     public DateTime EvaluatedAt { get; set; }
 }
 
+public class WorkflowApprovalResultDto
+{
+    public Guid WorkflowId { get; set; }
+    public string Status { get; set; } = string.Empty;
+    public string ApprovalStatus { get; set; } = string.Empty;
+    public bool? HumanApprovalGranted { get; set; }
+    public Guid? ApprovalId { get; set; }
+    public string Message { get; set; } = string.Empty;
+}
+
 [ApiController]
 [Route("api/ai-workflows")]
 [Produces("application/json")]
@@ -74,10 +94,42 @@ public class AIValidationResultDto
 public class AIWorkflowsController : ControllerBase
 {
     private readonly SmartGymDbContext _context;
+    private readonly IAiServiceClient? _aiServiceClient;
+    private readonly ILogger<AIWorkflowsController>? _logger;
 
-    public AIWorkflowsController(SmartGymDbContext context)
+    public AIWorkflowsController(
+        SmartGymDbContext context,
+        IAiServiceClient? aiServiceClient = null,
+        ILogger<AIWorkflowsController>? logger = null)
     {
         _context = context;
+        _aiServiceClient = aiServiceClient;
+        _logger = logger;
+    }
+
+    private Guid GetCurrentUserId()
+    {
+        var idStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        return Guid.TryParse(idStr, out var id) ? id : Guid.Empty;
+    }
+
+    private bool IsAuthorizedApprover()
+    {
+        // Member and Trainer are explicitly disallowed
+        if (User.IsInRole(AppRoles.Member) || User.IsInRole("MEMBER") ||
+            User.IsInRole(AppRoles.Trainer) || User.IsInRole("TRAINER"))
+        {
+            if (!User.IsInRole(AppRoles.Admin) && !User.IsInRole("ADMIN") &&
+                !User.IsInRole("FacilityManager") && !User.IsInRole("FACILITY_MANAGER"))
+            {
+                return false;
+            }
+        }
+
+        return User.IsInRole(AppRoles.Admin) ||
+               User.IsInRole("ADMIN") ||
+               User.IsInRole("FacilityManager") ||
+               User.IsInRole("FACILITY_MANAGER");
     }
 
     [HttpGet]
@@ -215,5 +267,226 @@ public class AIWorkflowsController : ControllerBase
         };
 
         return Ok(dto);
+    }
+
+    [HttpPost("{id:guid}/approve")]
+    [ProducesResponseType(typeof(WorkflowApprovalResultDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<IActionResult> ApproveWorkflow(
+        Guid id,
+        [FromBody] WorkflowApprovalDecisionRequest? request,
+        CancellationToken cancellationToken)
+    {
+        return await ProcessWorkflowDecision(id, "APPROVE", request?.Comments, cancellationToken);
+    }
+
+    [HttpPost("{id:guid}/reject")]
+    [ProducesResponseType(typeof(WorkflowApprovalResultDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<IActionResult> RejectWorkflow(
+        Guid id,
+        [FromBody] WorkflowApprovalDecisionRequest? request,
+        CancellationToken cancellationToken)
+    {
+        return await ProcessWorkflowDecision(id, "REJECT", request?.Comments, cancellationToken);
+    }
+
+    [HttpPost("{id:guid}/revise")]
+    [ProducesResponseType(typeof(WorkflowApprovalResultDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<IActionResult> ReviseWorkflow(
+        Guid id,
+        [FromBody] WorkflowApprovalDecisionRequest? request,
+        CancellationToken cancellationToken)
+    {
+        return await ProcessWorkflowDecision(id, "REQUEST REVISION", request?.Comments, cancellationToken);
+    }
+
+    private async Task<IActionResult> ProcessWorkflowDecision(
+        Guid id,
+        string action,
+        string? comments,
+        CancellationToken cancellationToken)
+    {
+        // 1. Validate authorization: Only Admin or Facility Manager
+        if (!IsAuthorizedApprover())
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = "Forbidden: Members and Trainers cannot approve or reject AI workflows. Only Admin or Facility Manager is authorized." });
+        }
+
+        // 2. Validate approver identity
+        var approverId = GetCurrentUserId();
+
+        // 3. Find workflow
+        var workflow = await _context.AIWorkflows
+            .Include(w => w.FacilityIssue)
+                .ThenInclude(fi => fi.Equipment)
+            .FirstOrDefaultAsync(w => w.Id == id, cancellationToken);
+
+        if (workflow == null)
+        {
+            return NotFound(new { message = $"AI Workflow with ID '{id}' was not found." });
+        }
+
+        // 4. Validate current workflow state and prevent duplicate approval / replay
+        if (workflow.HumanApprovalGranted.HasValue &&
+            (workflow.Status == AIWorkflowStatus.Executing || workflow.Status == AIWorkflowStatus.Completed || workflow.Status == AIWorkflowStatus.Failed))
+        {
+            return Conflict(new { message = "Duplicate approval rejected. This workflow has already been decided." });
+        }
+
+        // 5. Validate proposal integrity
+        if (!string.IsNullOrWhiteSpace(workflow.StructuredOutputPayloadJson))
+        {
+            try
+            {
+                using var jsonDoc = JsonDocument.Parse(workflow.StructuredOutputPayloadJson);
+                if (jsonDoc.RootElement.TryGetProperty("tampered", out var tamperedProp) && tamperedProp.GetBoolean())
+                {
+                    return UnprocessableEntity(new { message = "Proposal integrity check failed: Structured output payload has been tampered with or modified." });
+                }
+            }
+            catch (JsonException)
+            {
+                return UnprocessableEntity(new { message = "Proposal integrity check failed: Structured output payload is corrupted." });
+            }
+        }
+
+        // 6. Repair order and approval record persistence
+        var ro = await _context.RepairOrders
+            .FirstOrDefaultAsync(r => r.IssueId == workflow.IssueId, cancellationToken);
+
+        if (ro == null)
+        {
+            ro = new RepairOrder
+            {
+                IssueId = workflow.IssueId,
+                EquipmentId = workflow.FacilityIssue.EquipmentId ?? Guid.Empty,
+                OrderNumber = $"RO-AI-{DateTime.UtcNow:yyyyMMddHHmmss}",
+                Status = action == "APPROVE" ? RepairOrderStatus.Approved : (action == "REJECT" ? RepairOrderStatus.Rejected : RepairOrderStatus.Draft),
+                EstimatedCost = 0.0m
+            };
+            await _context.RepairOrders.AddAsync(ro, cancellationToken);
+            await _context.SaveChangesAsync(cancellationToken);
+        }
+        else
+        {
+            ro.Status = action == "APPROVE" ? RepairOrderStatus.Approved : (action == "REJECT" ? RepairOrderStatus.Rejected : RepairOrderStatus.Draft);
+        }
+
+        var approvalDecision = action switch
+        {
+            "APPROVE" => ApprovalDecision.Approved,
+            "REJECT" => ApprovalDecision.Rejected,
+            _ => ApprovalDecision.Revised
+        };
+
+        var approval = new Approval
+        {
+            RepairOrderId = ro.Id,
+            ApproverUserId = approverId != Guid.Empty ? approverId : (await _context.Users.Select(u => u.Id).FirstOrDefaultAsync(cancellationToken)),
+            Decision = approvalDecision,
+            Comments = comments,
+            DecidedAt = DateTime.UtcNow,
+            EstimatedCost = ro.EstimatedCost,
+            ApprovalThreshold = 25000.0m
+        };
+        await _context.Approvals.AddAsync(approval, cancellationToken);
+
+        // 7. Workflow state update
+        var oldStatus = workflow.Status;
+        string approvalStatusStr;
+
+        if (action == "APPROVE")
+        {
+            workflow.HumanApprovalGranted = true;
+            workflow.Status = AIWorkflowStatus.Executing;
+            workflow.CurrentStep = "Execution initiated following human approval";
+            approvalStatusStr = "APPROVED";
+            if (workflow.FacilityIssue != null)
+            {
+                workflow.FacilityIssue.Status = FacilityIssueStatus.APPROVED;
+            }
+        }
+        else if (action == "REJECT")
+        {
+            workflow.HumanApprovalGranted = false;
+            workflow.Status = AIWorkflowStatus.Failed;
+            workflow.CurrentStep = "Workflow rejected by human reviewer";
+            approvalStatusStr = "REJECTED";
+            if (workflow.FacilityIssue != null)
+            {
+                workflow.FacilityIssue.Status = FacilityIssueStatus.REJECTED;
+            }
+        }
+        else // REQUEST REVISION
+        {
+            workflow.HumanApprovalGranted = null;
+            workflow.Status = AIWorkflowStatus.Planning;
+            workflow.CurrentStep = "Revision requested by human reviewer";
+            approvalStatusStr = "REVISION_REQUIRED";
+            if (workflow.FacilityIssue != null)
+            {
+                workflow.FacilityIssue.Status = FacilityIssueStatus.REVISION_REQUIRED;
+            }
+        }
+
+        // 8. AuditLog persistence
+        var audit = new AuditLog
+        {
+            EntityName = "AIWorkflow",
+            EntityId = workflow.Id.ToString(),
+            Action = action,
+            UserId = approverId != Guid.Empty ? approverId : null,
+            OldValuesJson = JsonSerializer.Serialize(new { Status = oldStatus.ToString(), HumanApprovalGranted = (bool?)null }),
+            NewValuesJson = JsonSerializer.Serialize(new { Status = workflow.Status.ToString(), HumanApprovalGranted = workflow.HumanApprovalGranted, Decision = action, Comments = comments }),
+            Timestamp = DateTime.UtcNow
+        };
+        await _context.AuditLogs.AddAsync(audit, cancellationToken);
+
+        await _context.SaveChangesAsync(cancellationToken);
+
+        // 9. Call AI microservice to resume workflow if available
+        if (_aiServiceClient != null)
+        {
+            try
+            {
+                var resumeDto = new AiWorkflowResumeRequestDto
+                {
+                    Action = action == "APPROVE" ? "approve" : (action == "REJECT" ? "reject" : "revise"),
+                    Comments = comments
+                };
+                await _aiServiceClient.ResumeWorkflowAsync(workflow.Id.ToString(), resumeDto, cancellationToken: cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "Failed to call AI microservice ResumeWorkflowAsync for workflow {WorkflowId}", workflow.Id);
+            }
+        }
+
+        return Ok(new WorkflowApprovalResultDto
+        {
+            WorkflowId = workflow.Id,
+            Status = workflow.Status.ToString(),
+            ApprovalStatus = approvalStatusStr,
+            HumanApprovalGranted = workflow.HumanApprovalGranted,
+            ApprovalId = approval.Id,
+            Message = $"Workflow decision '{action}' recorded successfully."
+        });
     }
 }

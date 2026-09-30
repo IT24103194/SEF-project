@@ -98,6 +98,9 @@ class MockLLMClient(ILLMClient):
                                     "recommendedAction": popped.get("recommendedAction") or popped.get("recommended_action") or "Action",
                                     "supportingDataReferences": popped.get("supportingDataReferences") or popped.get("supporting_data_references") or []
                                 })
+                        elif schema and getattr(schema, "__name__", "") == "ActionAgentOutput":
+                            if "proposedAction" in parsed or "proposed_action" in parsed:
+                                return self.queued_responses.pop(i)
                         elif schema and getattr(schema, "__name__", "") == "DiagnosisOutputSchema":
                             if "estimated_cost" in parsed and ("diagnosis_summary" in parsed or "diagnosis" in parsed):
                                 return self.queued_responses.pop(i)
@@ -207,6 +210,20 @@ class MockLLMClient(ILLMClient):
                     "Previous repair order #RO-2024-001 showed pulley lubrication",
                     "Inventory check: SKU B-102 available in Bin A-12",
                     "Supplier: LifeFitness Certified Logistics"
+                ]
+            })
+
+        if schema and getattr(schema, "__name__", "") == "ActionAgentOutput":
+            return json.dumps({
+                "proposedAction": "Executed authorized repair order and notified supplier.",
+                "repairOrderId": "22222222-2222-2222-2222-222222222222",
+                "supplierId": "33333333-3333-3333-3333-333333333333",
+                "estimatedCost": 15000.0,
+                "executionPlan": [
+                    "Created Repair Order",
+                    "Dispatched Vendor RFQ",
+                    "Updated Issue Status to VENDOR_CONTACTED",
+                    "Created Staff Notification"
                 ]
             })
 

@@ -16,6 +16,13 @@ from smartgym_ai.tools.domain_tools import (
     GetSupplierDetailsTool,
     GetProductDetailsTool,
 )
+from smartgym_ai.tools.action_tools import (
+    CreateRepairOrderTool,
+    PrepareVendorEmailTool,
+    SendVendorEmailTool,
+    UpdateFacilityIssueStatusTool,
+    CreateNotificationTool,
+)
 
 # Register safety tools in singleton registry
 tool_registry.register(ModerateTextTool())
@@ -32,6 +39,13 @@ tool_registry.register(GetSimilarFacilityIssuesTool())
 tool_registry.register(CheckInventoryTool())
 tool_registry.register(GetSupplierDetailsTool())
 tool_registry.register(GetProductDetailsTool())
+
+# Register action tools in singleton registry
+tool_registry.register(CreateRepairOrderTool())
+tool_registry.register(PrepareVendorEmailTool())
+tool_registry.register(SendVendorEmailTool())
+tool_registry.register(UpdateFacilityIssueStatusTool())
+tool_registry.register(CreateNotificationTool())
 
 __all__ = [
     "ToolBase",
@@ -50,4 +64,9 @@ __all__ = [
     "CheckInventoryTool",
     "GetSupplierDetailsTool",
     "GetProductDetailsTool",
+    "CreateRepairOrderTool",
+    "PrepareVendorEmailTool",
+    "SendVendorEmailTool",
+    "UpdateFacilityIssueStatusTool",
+    "CreateNotificationTool",
 ]

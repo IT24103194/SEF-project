@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import approvalsApi from '../services/approvalsApi';
+import aiWorkflowsApi from '../services/aiWorkflowsApi';
 import PageHeader from '../components/common/PageHeader';
 import Pagination from '../components/common/Pagination';
 import EmptyState from '../components/common/EmptyState';
@@ -56,16 +57,27 @@ export const ApprovalsPage = () => {
     e.preventDefault();
     if (!selectedApproval) return;
     setIsSubmitting(true);
+    setError(null);
     try {
-      await approvalsApi.submitDecision(selectedApproval.id, {
-        decision: decisionType,
-        comments: comments.trim() || undefined,
-      });
+      if (selectedApproval.aiWorkflowId) {
+        if (decisionType === 'Approved') {
+          await aiWorkflowsApi.approveWorkflow(selectedApproval.aiWorkflowId, comments.trim());
+        } else if (decisionType === 'Rejected') {
+          await aiWorkflowsApi.rejectWorkflow(selectedApproval.aiWorkflowId, comments.trim());
+        } else {
+          await aiWorkflowsApi.reviseWorkflow(selectedApproval.aiWorkflowId, comments.trim());
+        }
+      } else {
+        await approvalsApi.submitDecision(selectedApproval.id, {
+          decision: decisionType === 'RevisionRequired' ? 'RevisionRequired' : decisionType,
+          comments: comments.trim() || undefined,
+        });
+      }
       setSelectedApproval(null);
       fetchApprovals();
     } catch (err) {
       console.error('Failed to submit decision:', err);
-      setError('Failed to record approval decision.');
+      setError(err?.response?.data?.message || 'Failed to record approval decision.');
     } finally {
       setIsSubmitting(false);
     }
@@ -86,9 +98,9 @@ export const ApprovalsPage = () => {
       />
 
       {/* Filter Tabs */}
-      <div className="glass-card" style={{ padding: '0.75rem 1.25rem', marginBottom: '1.5rem', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+      <div className="glass-card" style={{ padding: '0.75rem 1.25rem', marginBottom: '1.5rem', display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
         <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600, marginRight: '0.5rem' }}>Decision Status:</span>
-        {['Pending', 'Approved', 'Rejected', ''].map((s) => (
+        {['Pending', 'Approved', 'Rejected', 'Revised', ''].map((s) => (
           <button
             key={s}
             onClick={() => {
@@ -163,6 +175,11 @@ export const ApprovalsPage = () => {
                           High Value (&gt;${app.approvalThreshold})
                         </span>
                       )}
+                      {app.aiWorkflowId && (
+                        <span className="badge badge-primary" style={{ fontSize: '0.65rem', background: 'rgba(59,130,246,0.2)', color: '#60a5fa' }}>
+                          AI Workflow
+                        </span>
+                      )}
                     </div>
                     <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '0.4rem' }}>
                       Issue: <strong style={{ color: '#ffffff' }}>{app.issueTitle || 'Reported breakdown'}</strong>
@@ -180,26 +197,36 @@ export const ApprovalsPage = () => {
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   {isPending ? (
                     <>
                       <button
                         onClick={() => handleOpenDecision(app, 'Approved')}
                         className="btn btn-primary"
-                        style={{ padding: '0.5rem 1rem', background: 'var(--accent-emerald)' }}
+                        style={{ padding: '0.5rem 0.85rem', background: 'var(--accent-emerald)' }}
+                        title="Authorize repair order and workflow execution"
                       >
                         <CheckCircle2 size={16} /> Authorize
                       </button>
                       <button
+                        onClick={() => handleOpenDecision(app, 'RevisionRequired')}
+                        className="btn btn-secondary"
+                        style={{ padding: '0.5rem 0.85rem', borderColor: 'var(--accent-amber)', color: 'var(--accent-amber)' }}
+                        title="Request revision from planner agent"
+                      >
+                        <AlertCircle size={16} /> Request Revision
+                      </button>
+                      <button
                         onClick={() => handleOpenDecision(app, 'Rejected')}
                         className="btn btn-danger"
-                        style={{ padding: '0.5rem 1rem' }}
+                        style={{ padding: '0.5rem 0.85rem' }}
+                        title="Reject repair order and stop execution"
                       >
                         <XCircle size={16} /> Reject
                       </button>
                     </>
                   ) : (
-                    <span className={`badge ${app.decision === 'Approved' ? 'badge-success' : 'badge-danger'}`} style={{ fontSize: '0.8rem' }}>
+                    <span className={`badge ${app.decision === 'Approved' ? 'badge-success' : (app.decision === 'Rejected' ? 'badge-danger' : 'badge-warning')}`} style={{ fontSize: '0.8rem' }}>
                       {app.decision}
                     </span>
                   )}
@@ -228,7 +255,7 @@ export const ApprovalsPage = () => {
           <div className="modal-content" style={{ maxWidth: 480 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem' }}>
               <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: '#ffffff' }}>
-                Confirm {decisionType === 'Approved' ? 'Approval' : 'Rejection'}: {selectedApproval.orderNumber}
+                Confirm {decisionType === 'Approved' ? 'Approval' : (decisionType === 'Rejected' ? 'Rejection' : 'Revision Request')}: {selectedApproval.orderNumber}
               </h3>
               <button
                 onClick={() => setSelectedApproval(null)}
@@ -240,7 +267,7 @@ export const ApprovalsPage = () => {
 
             <form onSubmit={handleSubmitDecision}>
               <div style={{ marginBottom: '1rem', fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
-                You are about to {decisionType.toLowerCase()} the repair order for <strong style={{ color: '#ffffff' }}>{selectedApproval.equipmentName}</strong> estimated at <strong style={{ color: 'var(--accent-emerald)' }}>${selectedApproval.estimatedCost?.toFixed(2)}</strong>.
+                You are about to {decisionType === 'RevisionRequired' ? 'request a revision for' : decisionType.toLowerCase()} the repair order for <strong style={{ color: '#ffffff' }}>{selectedApproval.equipmentName}</strong> estimated at <strong style={{ color: 'var(--accent-emerald)' }}>${selectedApproval.estimatedCost?.toFixed(2)}</strong>.
               </div>
 
               <div className="form-group">
@@ -248,7 +275,7 @@ export const ApprovalsPage = () => {
                 <textarea
                   className="form-textarea"
                   rows={3}
-                  placeholder="Enter notes or audit justification..."
+                  placeholder={decisionType === 'RevisionRequired' ? 'Explain what changes or additional data are required...' : 'Enter notes or audit justification...'}
                   value={comments}
                   onChange={(e) => setComments(e.target.value)}
                 />
@@ -266,9 +293,10 @@ export const ApprovalsPage = () => {
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className={`btn ${decisionType === 'Approved' ? 'btn-primary' : 'btn-danger'}`}
+                  className={`btn ${decisionType === 'Approved' ? 'btn-primary' : (decisionType === 'Rejected' ? 'btn-danger' : 'btn-secondary')}`}
+                  style={decisionType === 'RevisionRequired' ? { background: 'var(--accent-amber)', color: '#000', fontWeight: 700 } : {}}
                 >
-                  {isSubmitting ? 'Recording...' : `Confirm ${decisionType}`}
+                  {isSubmitting ? 'Recording...' : (decisionType === 'Approved' ? 'Confirm Approval' : (decisionType === 'Rejected' ? 'Confirm Rejection' : 'Submit Revision Request'))}
                 </button>
               </div>
             </form>

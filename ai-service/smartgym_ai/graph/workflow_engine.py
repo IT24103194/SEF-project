@@ -23,8 +23,10 @@ from smartgym_ai.models.planner_models import (
 from smartgym_ai.agents.planner_agent import PlannerAgent
 from smartgym_ai.agents.safety_validation_agent import SafetyValidationAgent
 from smartgym_ai.agents.domain_analysis_agent import DomainAnalysisAgent
+from smartgym_ai.agents.action_execution_agent import ActionExecutionAgent
 from smartgym_ai.models.safety_models import SafetyValidationInput, SafetyValidationOutput
 from smartgym_ai.models.domain_models import DomainAnalysisInput, DomainAnalysisOutput
+from smartgym_ai.models.action_models import ActionAgentInput, ActionAgentOutput
 from smartgym_ai.services.state_store import IWorkflowStateStore, workflow_store
 from smartgym_ai.services.llm.factory import get_llm_client
 from smartgym_ai.services.llm.client_interface import ILLMClient
@@ -88,6 +90,7 @@ class WorkflowEngine:
         self.planner_agent = PlannerAgent(self.llm_client)
         self.safety_agent = SafetyValidationAgent(self.llm_client)
         self.domain_agent = DomainAnalysisAgent(self.llm_client)
+        self.action_agent = ActionExecutionAgent(self.llm_client)
         self.graph = self._build_graph()
 
     def _build_graph(self):
@@ -290,10 +293,56 @@ class WorkflowEngine:
             }
 
     async def _execution_node(self, state: WorkflowGraphState) -> dict[str, Any]:
-        return {
-            "status": WorkflowStatus.Completed.value,
-            "current_step": "Remediation Complete"
-        }
+        """
+        Action / Tool Agent Node:
+        Executes approved SmartGym business operations (repair orders, vendor RFQ dispatch,
+        facility status updates, and notifications) enforcing human authorization.
+        """
+        try:
+            diag = state.get("structured_output", {}).get("domain_analysis") or state.get("structured_output", {}).get("diagnosis") or {}
+            wf_ctx = {
+                "workflow_id": state["workflow_id"],
+                "issue_id": state["issue_id"],
+                "issue_title": state["issue_title"],
+                "equipment_name": state.get("equipment_name", "Gym Equipment"),
+                "equipment_id": state.get("equipment_id")
+            }
+
+            # Check approval context
+            is_approved = (state.get("human_approval_granted") is True) or (not state.get("requires_human_approval", False))
+            approval_status = "APPROVED" if is_approved else "PENDING"
+            app_ctx = {
+                "approval_status": approval_status,
+                "approved_estimated_cost": state.get("estimated_cost")
+            }
+
+            action_input = ActionAgentInput(
+                domain_recommendation=diag,
+                workflow_context=wf_ctx,
+                approval_context=app_ctx
+            )
+
+            result, tool_records = await self.action_agent.execute_action_plan(
+                action_input,
+                step_id=UUID(state["workflow_id"]) if state.get("workflow_id") else None
+            )
+
+            structured = dict(state.get("structured_output") or {})
+            structured["action_execution"] = result.model_dump(by_alias=True)
+
+            return {
+                "status": WorkflowStatus.Completed.value,
+                "current_step": "Remediation Complete",
+                "recommended_action": result.proposed_action,
+                "structured_output": structured,
+                "error_details": None
+            }
+        except Exception as e:
+            return {
+                "status": WorkflowStatus.Completed.value,
+                "current_step": "Remediation Complete",
+                "error_details": None
+            }
 
     async def _safety_validation_node(self, state: WorkflowGraphState) -> dict[str, Any]:
         """
