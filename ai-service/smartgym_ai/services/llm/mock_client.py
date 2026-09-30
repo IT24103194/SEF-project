@@ -80,6 +80,9 @@ class MockLLMClient(ILLMClient):
                         if schema and getattr(schema, "__name__", "") == "PlannerOutput":
                             if "steps" in parsed or "objective" in parsed:
                                 return self.queued_responses.pop(i)
+                        elif schema and getattr(schema, "__name__", "") == "SafetyValidationOutput":
+                            if "contentSafe" in parsed or "content_safe" in parsed or "sanitizedDescription" in parsed:
+                                return self.queued_responses.pop(i)
                         elif schema and getattr(schema, "__name__", "") == "DiagnosisOutputSchema":
                             if "estimated_cost" in parsed and ("diagnosis_summary" in parsed or "diagnosis" in parsed):
                                 return self.queued_responses.pop(i)
@@ -162,6 +165,17 @@ class MockLLMClient(ILLMClient):
                 "assigned_agent": "SafetyValidationAgent",
                 "reason": "Standard 9-step facility repair lifecycle with safety check and authorization gate.",
                 "approval_required": False
+            })
+
+        if schema and getattr(schema, "__name__", "") == "SafetyValidationOutput":
+            return json.dumps({
+                "contentSafe": True,
+                "sanitizedDescription": "Equipment belt slips during acceleration.",
+                "ticketValid": True,
+                "businessRulesSatisfied": True,
+                "approvalRequired": False,
+                "issues": [],
+                "validationSummary": "All safety, content, and business validation rules successfully satisfied."
             })
 
         # Default fallback response for diagnosis

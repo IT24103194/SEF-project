@@ -16,6 +16,11 @@ from smartgym_ai.models.planner_models import (
     SupportedAgent,
     normalize_agent_name,
 )
+from smartgym_ai.models.safety_models import (
+    SafetyValidationInput,
+    SafetyValidationOutput,
+    ContentModerationRecord,
+)
 
 __all__ = [
     "WorkflowStatus",
@@ -32,4 +37,7 @@ __all__ = [
     "PlannerOutput",
     "SupportedAgent",
     "normalize_agent_name",
+    "SafetyValidationInput",
+    "SafetyValidationOutput",
+    "ContentModerationRecord",
 ]

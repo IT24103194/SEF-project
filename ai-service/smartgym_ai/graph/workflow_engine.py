@@ -21,6 +21,8 @@ from smartgym_ai.models.planner_models import (
     PlannedStep,
 )
 from smartgym_ai.agents.planner_agent import PlannerAgent
+from smartgym_ai.agents.safety_validation_agent import SafetyValidationAgent
+from smartgym_ai.models.safety_models import SafetyValidationInput, SafetyValidationOutput
 from smartgym_ai.services.state_store import IWorkflowStateStore, workflow_store
 from smartgym_ai.services.llm.factory import get_llm_client
 from smartgym_ai.services.llm.client_interface import ILLMClient
@@ -53,6 +55,10 @@ class WorkflowGraphState(TypedDict):
     recommended_action: str
     error_details: Optional[str]
     structured_output: dict[str, Any]
+    # Equipment and actor context
+    equipment_id: Optional[str]
+    severity: Optional[int]
+    user_role: Optional[str]
     # Planner agent contracts
     objective: str
     plan_id: Optional[str]
@@ -78,6 +84,7 @@ class WorkflowEngine:
         self.store = store or workflow_store
         self.llm_client = llm_client or get_llm_client()
         self.planner_agent = PlannerAgent(self.llm_client)
+        self.safety_agent = SafetyValidationAgent(self.llm_client)
         self.graph = self._build_graph()
 
     def _build_graph(self):
@@ -86,6 +93,7 @@ class WorkflowEngine:
         # Nodes
         workflow.add_node("initialize", self._initialize_node)
         workflow.add_node("planner", self._planner_node)
+        workflow.add_node("safety_validation", self._safety_validation_node)
         workflow.add_node("evaluate_diagnosis", self._evaluate_diagnosis_node)
         workflow.add_node("approval_gate", self._approval_gate_node)
         workflow.add_node("execution", self._execution_node)
@@ -95,10 +103,20 @@ class WorkflowEngine:
         workflow.set_entry_point("initialize")
         workflow.add_edge("initialize", "planner")
 
-        # Routing after Planner
+        # Routing after Planner -> safety_validation
         workflow.add_conditional_edges(
             "planner",
             self._route_after_planner,
+            {
+                "safety_validation": "safety_validation",
+                "safe_failure": "safe_failure"
+            }
+        )
+
+        # Routing after Safety Validation -> evaluate_diagnosis
+        workflow.add_conditional_edges(
+            "safety_validation",
+            self._route_after_safety_validation,
             {
                 "evaluate_diagnosis": "evaluate_diagnosis",
                 "safe_failure": "safe_failure"
@@ -253,6 +271,77 @@ class WorkflowEngine:
             "current_step": "Remediation Complete"
         }
 
+    async def _safety_validation_node(self, state: WorkflowGraphState) -> dict[str, Any]:
+        """
+        Safety & Business Validation Agent Node:
+        Executes content moderation, sanitization, ticket attribute validation,
+        and deterministic business policy checks.
+        """
+        try:
+            facility_issue = {
+                "id": state["issue_id"],
+                "issue_id": state["issue_id"],
+                "title": state["issue_title"],
+                "description": state["description"],
+                "equipment_id": state.get("equipment_id"),
+                "equipment_name": state.get("equipment_name", "Gym Equipment"),
+                "severity": state.get("severity", 2)
+            }
+            planner_out = state.get("structured_output", {}).get("plan")
+            wf_ctx = {
+                "workflow_id": state["workflow_id"],
+                "user_role": state.get("user_role", "Member"),
+                "estimated_cost": state.get("estimated_cost", 0.0)
+            }
+
+            validation_input = SafetyValidationInput(
+                facility_issue=facility_issue,
+                planner_output=planner_out,
+                workflow_context=wf_ctx
+            )
+
+            val_result = await self.safety_agent.validate_request(validation_input)
+
+            structured = dict(state.get("structured_output") or {})
+            structured["safety_validation"] = val_result.model_dump(by_alias=True)
+
+            sanitized_desc = val_result.sanitized_description or state["description"]
+
+            # If validation failed fatally, route to safe failure
+            if not val_result.content_safe or not val_result.ticket_valid or not val_result.business_rules_satisfied:
+                err_summary = "; ".join(val_result.issues) if val_result.issues else "Safety validation policy failed."
+                return {
+                    "error_details": f"Safety validation failed: {err_summary}",
+                    "current_step": "Safety Validation Failed",
+                    "description": sanitized_desc,
+                    "structured_output": structured
+                }
+
+            # Succeeded: update next agent and step from plan
+            planned_steps = state.get("planned_steps") or []
+            next_agent = "DomainAnalysisAgent"
+            next_step = "Analyze equipment history"
+            if len(planned_steps) > 1:
+                next_agent = planned_steps[1].get("assigned_agent", next_agent)
+                next_step = planned_steps[1].get("step_name", next_step)
+
+            structured["next_agent"] = next_agent
+            structured["next_step"] = next_step
+
+            return {
+                "current_step": "Validate facility issue",
+                "description": sanitized_desc,
+                "requires_human_approval": state.get("requires_human_approval", False) or val_result.approval_required,
+                "structured_output": structured,
+                "next_agent": next_agent,
+                "next_step": next_step,
+                "error_details": None
+            }
+        except Exception as e:
+            return {
+                "error_details": f"Safety validation node error: {str(e)}"
+            }
+
     async def _safe_failure_node(self, state: WorkflowGraphState) -> dict[str, Any]:
         return {
             "status": WorkflowStatus.Failed.value,
@@ -262,7 +351,12 @@ class WorkflowEngine:
 
     # --- Routing Conditions ---
 
-    def _route_after_planner(self, state: WorkflowGraphState) -> Literal["evaluate_diagnosis", "safe_failure"]:
+    def _route_after_planner(self, state: WorkflowGraphState) -> Literal["safety_validation", "safe_failure"]:
+        if state.get("error_details"):
+            return "safe_failure"
+        return "safety_validation"
+
+    def _route_after_safety_validation(self, state: WorkflowGraphState) -> Literal["evaluate_diagnosis", "safe_failure"]:
         if state.get("error_details"):
             return "safe_failure"
         return "evaluate_diagnosis"
@@ -328,6 +422,9 @@ class WorkflowEngine:
             "recommended_action": "",
             "error_details": None,
             "structured_output": {},
+            "equipment_id": str(request.equipment_id) if request.equipment_id else None,
+            "severity": request.context_data.get("severity", 2) if request.context_data else 2,
+            "user_role": request.context_data.get("user_role", "Member") if request.context_data else "Member",
             "objective": f"Resolve facility issue: {request.issue_title} on {request.equipment_name or 'Gym Equipment'}",
             "plan_id": None,
             "planned_steps": [],
@@ -439,6 +536,25 @@ class WorkflowEngine:
         state.requires_human_approval = output.get("requires_human_approval", state.requires_human_approval)
         state.human_approval_granted = output.get("human_approval_granted", state.human_approval_granted)
         state.structured_output = output.get("structured_output", state.structured_output)
+
+        if state.structured_output and "safety_validation" in state.structured_output:
+            sv = state.structured_output["safety_validation"]
+            for issue_msg in sv.get("issues", []):
+                state.validation_results.append(
+                    ValidationResultRecord(
+                        rule_name="SafetyValidationAgent",
+                        passed=False,
+                        validation_message=issue_msg
+                    )
+                )
+            if not sv.get("issues"):
+                state.validation_results.append(
+                    ValidationResultRecord(
+                        rule_name="SafetyValidationAgent",
+                        passed=True,
+                        validation_message="Safety, content, and business rules passed."
+                    )
+                )
 
         if output.get("error_details"):
             SafeFailureHandler.handle_safe_failure(

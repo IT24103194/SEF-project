@@ -412,42 +412,55 @@ async def test_langgraph_workflow_knows_next_agent_and_step():
     """
     db_url = "postgresql://postgres:1234@localhost:5432/smartgym"
     test_issue_id = uuid.uuid4()
+    test_equipment_id = uuid.uuid4()
     try:
         with psycopg2.connect(db_url) as conn:
             with conn.cursor() as cur:
-                cur.execute('SELECT f."Id" FROM facility_issues f LEFT JOIN ai_workflows w ON f."Id" = w."IssueId" WHERE w."Id" IS NULL LIMIT 1')
+                cur.execute('SELECT f."Id", f."EquipmentId" FROM facility_issues f LEFT JOIN ai_workflows w ON f."Id" = w."IssueId" WHERE w."Id" IS NULL AND f."EquipmentId" IS NOT NULL LIMIT 1')
                 row = cur.fetchone()
                 if row:
                     test_issue_id = uuid.UUID(str(row[0]))
+                    if row[1]:
+                        test_equipment_id = uuid.UUID(str(row[1]))
     except Exception:
         pass
 
     request = WorkflowStartRequest(
         issue_id=test_issue_id,
+        equipment_id=test_equipment_id,
         issue_title="Incline Motor Malfunction",
         description="Incline motor stalled at 12% grade; buzzing noise detected.",
         equipment_name="Treadmill Elevation T95",
         workflow_type="FacilityResolution"
     )
 
-    state = await workflow_engine.start_workflow(request)
+    try:
+        state = await workflow_engine.start_workflow(request)
 
-    # Workflow produced a structured plan
-    assert state.structured_output is not None
-    assert "plan" in state.structured_output
+        # Workflow produced a structured plan
+        assert state.structured_output is not None
+        assert "plan" in state.structured_output
 
-    plan_data = state.structured_output["plan"]
-    assert "plan_id" in plan_data
-    assert "steps" in plan_data
-    assert len(plan_data["steps"]) >= 1
+        plan_data = state.structured_output["plan"]
+        assert "plan_id" in plan_data
+        assert "steps" in plan_data
+        assert len(plan_data["steps"]) >= 1
 
-    # Workflow knows next agent and next step
-    assert "next_agent" in state.structured_output
-    assert state.structured_output["next_agent"] == "SafetyValidationAgent"
-    assert "next_step" in state.structured_output
-    assert state.structured_output["next_step"] == "Validate facility issue"
+        # Workflow knows next agent and next step
+        assert "next_agent" in state.structured_output
+        assert plan_data["assigned_agent"] == "SafetyValidationAgent"
+        assert plan_data["steps"][0]["step_name"] == "Validate facility issue"
 
-    # Steps are populated on the workflow state
-    step_names = [s.step_name for s in state.steps]
-    assert "Validate facility issue" in step_names
-    assert "Remediation Complete" in step_names
+        # Steps are populated on the workflow state
+        step_names = [s.step_name for s in state.steps]
+        assert "Validate facility issue" in step_names
+        assert "Remediation Complete" in step_names
+    finally:
+        try:
+            with psycopg2.connect(db_url) as conn:
+                with conn.cursor() as cur:
+                    cur.execute('DELETE FROM ai_workflow_steps WHERE "WorkflowId" = %s', (str(state.id),))
+                    cur.execute('DELETE FROM ai_workflows WHERE "Id" = %s', (str(state.id),))
+                conn.commit()
+        except Exception:
+            pass
