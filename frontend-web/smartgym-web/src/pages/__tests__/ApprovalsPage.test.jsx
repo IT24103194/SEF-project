@@ -90,8 +90,8 @@ describe('ApprovalsPage Component', () => {
     fireEvent.click(approveBtn);
 
     // Modal opens
-    expect(screen.getByText(/Confirm Approval/i)).toBeTruthy();
-    const confirmBtn = screen.getByRole('button', { name: /Confirm Approved/i });
+    expect(screen.getAllByText(/Confirm Approval/i).length).toBeGreaterThan(0);
+    const confirmBtn = screen.getByRole('button', { name: /^Confirm Approval$/i });
     fireEvent.click(confirmBtn);
 
     await waitFor(() => {

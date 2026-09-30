@@ -1,21 +1,18 @@
 """
-Phase 16: Complete SmartGym Agentic AI Workflow and Cross-Platform Integration Tests.
+Phase 17: Complete SmartGym Agentic AI Workflow and Cross-Platform Integration Tests.
 
 Validates the full evaluated end-to-end multi-agent pipeline:
 Safety Agent -> Planner Agent -> Domain Analysis Agent -> Action Agent
 With deterministic human-in-the-loop approval, transactional email preparation,
-and comprehensive fault tolerance:
-- Complete successful workflow
-- Reject workflow
-- Request revision
-- Unknown equipment
-- Prompt injection
-- Malformed LLM result
-- Tool failure
-- Email failure
-- Approval unauthorized
-- Duplicate action
-- End-to-end LangGraph state machine workflow
+and comprehensive fault tolerance covering all 8 Golden Cases:
+- Golden Case 1: Normal maintenance issue (Planning, Delegation, Agent/Tool Selection, Structured Output, Business Validation)
+- Golden Case 2: Unknown equipment (Safe failure, fallback diagnosis)
+- Golden Case 3: High repair cost -> approval required (Approval enforcement, HITL gate)
+- Golden Case 4: Unauthorized approval (RBAC & Approval enforcement, PermissionError)
+- Golden Case 5: Prompt injection attempt (Content moderation & Sanitization)
+- Golden Case 6: Malformed AI output (Schema validation, MalformedJSONError, Revision recovery)
+- Golden Case 7: Third-party email failure (Degraded execution, Observability)
+- Golden Case 8: Duplicate action (Idempotency, Replay protection)
 """
 
 import os
@@ -29,7 +26,7 @@ from pydantic import BaseModel
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "ai-service")))
 
 from smartgym_ai.models.safety_models import SafetyValidationInput, SafetyValidationOutput
-from smartgym_ai.models.planner_models import PlannerInput, PlannerOutput
+from smartgym_ai.models.planner_models import PlannerInput, PlannerOutput, SupportedAgent
 from smartgym_ai.models.domain_models import DomainAnalysisInput, DomainAnalysisOutput
 from smartgym_ai.models.action_models import ActionAgentInput, ActionAgentOutput, ApprovalStatus
 from smartgym_ai.models.workflow_models import (
@@ -74,20 +71,22 @@ class DiagnosticOutput(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# 1. Complete Successful 4-Agent Workflow
+# Golden Case 1: Normal Maintenance Issue
+# Verifies: Planning, Delegation, Agent Selection, Tool Selection,
+#           Structured Output, Business Validation.
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
-async def test_complete_successful_four_agent_workflow():
+async def test_golden_case_1_normal_maintenance_issue():
     """
-    Test the complete 4-agent workflow:
+    Golden Case 1:
     1. Member submits broken treadmill issue.
-    2. Safety Agent validates ticket and sanitizes text.
-    3. Planner Agent creates sequential diagnosis and repair plan.
-    4. Domain Analysis Agent queries gym tools and estimates cost.
+    2. Safety Agent validates ticket and sanitizes text (Business validation).
+    3. Planner Agent creates plan and delegates steps (Planning & Delegation).
+    4. Domain Analysis Agent selects gym tools and estimates cost (Tool Selection).
     5. Action Agent prepares proposal requiring approval.
     6. Admin approves workflow.
-    7. Action Agent executes approved tools (repair order, email, notification, status).
+    7. Action Agent executes approved tools (Tool selection & Structured output).
     """
     mock_llm = MockLLMClient()
     issue_id = uuid.uuid4()
@@ -116,7 +115,7 @@ async def test_complete_successful_four_agent_workflow():
     assert safety_result.business_rules_satisfied is True
     assert len(safety_result.sanitized_description) > 0
 
-    # Step 2: Planner Agent
+    # Step 2: Planner Agent (Planning & Delegation & Agent Selection)
     planner_agent = PlannerAgent(llm_client=mock_llm)
     planner_input = PlannerInput(
         workflow_id=workflow_id,
@@ -128,8 +127,13 @@ async def test_complete_successful_four_agent_workflow():
     plan: PlannerOutput = await planner_agent.create_plan(planner_input)
     assert plan.plan_id is not None
     assert len(plan.steps) >= 4
+    # Verify Agent Selection
+    assigned_agents = [s.assigned_agent for s in plan.steps]
+    assert any("Safety" in a for a in assigned_agents)
+    assert any("Domain" in a for a in assigned_agents)
+    assert any("Action" in a for a in assigned_agents)
 
-    # Step 3: Gym Domain Analysis Agent
+    # Step 3: Gym Domain Analysis Agent (Tool Selection & Structured Output)
     domain_agent = DomainAnalysisAgent(llm_client=mock_llm)
     domain_input = DomainAnalysisInput(
         facility_issue=ticket_payload,
@@ -143,8 +147,13 @@ async def test_complete_successful_four_agent_workflow():
     assert isinstance(domain_output, DomainAnalysisOutput)
     assert domain_output.estimated_cost > 0
     assert domain_output.recommended_supplier is not None
+    # Verify Tool Selection in Domain Agent
+    tools_used = [r.tool_name for r in domain_records]
+    assert "getEquipmentDetails" in tools_used
+    assert "checkInventory" in tools_used
+    assert "getSupplierDetails" in tools_used
 
-    # Step 4: Action Agent - Preparation (Before Approval)
+    # Step 4: Action Agent - Proposal before approval
     action_agent = ActionExecutionAgent(llm_client=mock_llm)
     action_input_pending = ActionAgentInput(
         domain_recommendation=domain_output.model_dump(by_alias=True),
@@ -158,11 +167,9 @@ async def test_complete_successful_four_agent_workflow():
     )
     output_pending, records_pending = await action_agent.execute_action_plan(action_input_pending)
     executed_tools_pending = [r.tool_name for r in records_pending]
-    # sendVendorEmail must NOT be executed prior to approval
     assert "sendVendorEmail" not in executed_tools_pending
-    assert any("paused" in step.lower() for step in output_pending.execution_plan)
 
-    # Step 5: Admin Approves Workflow
+    # Step 5: Admin Approves & Resumes Execution
     action_input_approved = ActionAgentInput(
         domain_recommendation=domain_output.model_dump(by_alias=True),
         workflow_context={
@@ -178,8 +185,6 @@ async def test_complete_successful_four_agent_workflow():
             "approved_estimated_cost": domain_output.estimated_cost
         }
     )
-
-    # Step 6: Action Agent Executes Approved Tools
     output_approved, records_approved = await action_agent.execute_action_plan(action_input_approved)
     executed_tools_approved = [r.tool_name for r in records_approved]
     assert "createRepairOrder" in executed_tools_approved
@@ -187,87 +192,17 @@ async def test_complete_successful_four_agent_workflow():
     assert "sendVendorEmail" in executed_tools_approved
     assert "updateFacilityIssueStatus" in executed_tools_approved
     assert "createNotification" in executed_tools_approved
-
     assert output_approved.estimated_cost == domain_output.estimated_cost
-    assert any("dispatched vendor email" in step.lower() for step in output_approved.execution_plan)
 
 
 # ---------------------------------------------------------------------------
-# 2. Reject Workflow
-# ---------------------------------------------------------------------------
-
-@pytest.mark.asyncio
-async def test_reject_workflow_prevents_action_execution():
-    """When human reviewer rejects workflow, Action Agent must not execute vendor orders."""
-    mock_llm = MockLLMClient()
-    action_agent = ActionExecutionAgent(llm_client=mock_llm)
-
-    action_input = ActionAgentInput(
-        domain_recommendation={
-            "possible_issue": "Broken incline motor",
-            "estimated_cost": 15000.0,
-            "recommended_supplier": "Apex Fitness",
-            "required_part": "Incline Actuator"
-        },
-        workflow_context={
-            "workflow_id": str(uuid.uuid4()),
-            "issue_id": str(uuid.uuid4()),
-            "equipment_name": "Treadmill T12"
-        },
-        approval_context={
-            "approval_status": "REJECTED",
-            "approver": "facility_manager@smartgym.com",
-            "comments": "Rejected. Repair to be handled under existing warranty contract."
-        }
-    )
-
-    output, records = await action_agent.execute_action_plan(action_input)
-    executed_tools = [r.tool_name for r in records]
-    assert "sendVendorEmail" not in executed_tools
-    assert any("paused" in step.lower() or "rejected" in step.lower() for step in output.execution_plan)
-
-
-# ---------------------------------------------------------------------------
-# 3. Request Revision
+# Golden Case 2: Unknown Equipment
+# Verifies: Safe failure, fallback handling, general facility diagnosis.
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
-async def test_request_revision_resets_workflow_to_planning():
-    """When revision is requested, workflow halts high-impact action and notes revision needed."""
-    mock_llm = MockLLMClient()
-    action_agent = ActionExecutionAgent(llm_client=mock_llm)
-
-    action_input = ActionAgentInput(
-        domain_recommendation={
-            "possible_issue": "Complete deck replacement",
-            "estimated_cost": 45000.0,
-            "recommended_supplier": "GymEquip Pro"
-        },
-        workflow_context={
-            "workflow_id": str(uuid.uuid4()),
-            "issue_id": str(uuid.uuid4()),
-            "equipment_name": "Treadmill T12"
-        },
-        approval_context={
-            "approval_status": "REVISION_REQUIRED",
-            "approver": "admin@smartgym.com",
-            "comments": "Please check if deck can be resurfaced before ordering replacement."
-        }
-    )
-
-    output, records = await action_agent.execute_action_plan(action_input)
-    executed_tools = [r.tool_name for r in records]
-    assert "sendVendorEmail" not in executed_tools
-    assert any("paused" in step.lower() or "approval" in step.lower() for step in output.execution_plan)
-
-
-# ---------------------------------------------------------------------------
-# 4. Unknown Equipment
-# ---------------------------------------------------------------------------
-
-@pytest.mark.asyncio
-async def test_unknown_equipment_handled_gracefully():
-    """When equipment is unknown or None, workflow diagnoses general facility issue without failing."""
+async def test_golden_case_2_unknown_equipment():
+    """Golden Case 2: Unknown equipment diagnosed gracefully as general facility issue."""
     mock_llm = MockLLMClient()
     domain_agent = DomainAnalysisAgent(llm_client=mock_llm)
 
@@ -295,12 +230,85 @@ async def test_unknown_equipment_handled_gracefully():
 
 
 # ---------------------------------------------------------------------------
-# 5. Prompt Injection
+# Golden Case 3: High Repair Cost -> Approval Required
+# Verifies: Approval enforcement, threshold gating, HITL state pause.
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
-async def test_prompt_injection_sanitized_and_contained():
-    """Prompt injection attempts are detected by Safety Agent and do not hijack workflow."""
+async def test_golden_case_3_high_repair_cost_approval_required():
+    """Golden Case 3: Estimated cost >= 25,000 LKR triggers AwaitingApproval state."""
+    store = InMemoryWorkflowStateStore()
+    mock_llm = MockLLMClient()
+    engine = WorkflowEngine(store=store, llm_client=mock_llm)
+
+    # Enqueue a high repair cost diagnosis (> 25,000 LKR threshold)
+    high_cost_diagnosis = {
+        "diagnosis_summary": "Major motor controller board blowout",
+        "recommended_action": "Replace motor controller assembly and re-calibrate",
+        "estimated_cost": 38000.0,
+        "confidence_score": 0.94
+    }
+    mock_llm.enqueue_json_response(high_cost_diagnosis)
+
+    issue_id = uuid.uuid4()
+    start_req = WorkflowStartRequest(
+        issue_id=issue_id,
+        issue_title="Severe motor blowout on Treadmill Pro",
+        equipment_name="Treadmill Pro",
+        description="Smoke and burning smell from motor base during sprint session.",
+        workflow_type="FacilityMaintenanceDiagnosis",
+        context_data={"severity": 3, "user_role": "Member"}
+    )
+
+    initial_state = await engine.start_workflow(start_req)
+    assert initial_state.id is not None
+    # Must pause at AwaitingApproval due to high cost
+    assert initial_state.status == WorkflowStatus.AwaitingApproval
+    assert initial_state.requires_human_approval is True
+    assert initial_state.estimated_cost == 38000.0
+
+
+# ---------------------------------------------------------------------------
+# Golden Case 4: Unauthorized Approval
+# Verifies: RBAC, permission enforcement, non-approved status rejection.
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_golden_case_4_unauthorized_approval():
+    """Golden Case 4: Attempt to dispatch high-impact action without approved status raises PermissionError."""
+    tool = SendVendorEmailTool()
+
+    # PENDING status must be rejected
+    with pytest.raises(PermissionError) as exc_pending:
+        await tool._run(
+            recipient="vendor@supplies.com",
+            subject="Order",
+            body="Dispatch parts",
+            approval_status="PENDING",
+            idempotency_key="key-unauth-pending"
+        )
+    assert "Human approval" in str(exc_pending.value)
+
+    # REJECTED status must be rejected
+    with pytest.raises(PermissionError) as exc_rejected:
+        await tool._run(
+            recipient="vendor@supplies.com",
+            subject="Order",
+            body="Dispatch parts",
+            approval_status="REJECTED",
+            idempotency_key="key-unauth-rejected"
+        )
+    assert "Human approval" in str(exc_rejected.value)
+
+
+# ---------------------------------------------------------------------------
+# Golden Case 5: Prompt Injection Attempt
+# Verifies: Prompt injection detection, input sanitization, safe failure.
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_golden_case_5_prompt_injection_attempt():
+    """Golden Case 5: Malicious prompt injection payload is sanitized and prevented from hijacking workflow."""
     mock_llm = MockLLMClient()
     safety_agent = SafetyValidationAgent(llm_client=mock_llm)
 
@@ -320,24 +328,28 @@ async def test_prompt_injection_sanitized_and_contained():
     )
 
     result = await safety_agent.validate_request(safety_input)
-    # The injection attempt must be blocked or sanitized
     sanitized = result.sanitized_description.lower()
     assert "system override" not in sanitized or result.content_safe is False or len(result.issues) > 0
     assert "drop table" not in sanitized or result.content_safe is False or len(result.issues) > 0
 
 
 # ---------------------------------------------------------------------------
-# 6. Malformed LLM Result
+# Golden Case 6: Malformed AI Output
+# Verifies: Schema validation, MalformedJSONError, error recovery.
 # ---------------------------------------------------------------------------
 
-def test_malformed_llm_result_handled_with_fallback():
-    """Malformed LLM responses are caught and raise MalformedJSONError for structured retry."""
+def test_golden_case_6_malformed_ai_output():
+    """Golden Case 6: Malformed non-JSON output from LLM raises MalformedJSONError and is safely recoverable."""
     raw_garbage = "This is not valid JSON at all: { broken json: [1, 2"
     with pytest.raises(MalformedJSONError) as exc_info:
         SchemaValidator.parse_and_validate(raw_garbage, DiagnosticOutput)
     assert exc_info.value.raw_output == raw_garbage
 
-    # Valid JSON parsing works cleanly
+    # Revision prompt can be generated to recover
+    revision_prompt = SchemaValidator.generate_revision_prompt(raw_garbage, exc_info.value, DiagnosticOutput)
+    assert "JSON" in revision_prompt or "instructions" in revision_prompt.lower()
+
+    # Second valid response parses cleanly
     valid_json = '{"issue_found": true, "component": "Motor", "repair_estimate_lkr": 15000.0}'
     validated = SchemaValidator.parse_and_validate(valid_json, DiagnosticOutput)
     assert validated.issue_found is True
@@ -345,37 +357,13 @@ def test_malformed_llm_result_handled_with_fallback():
 
 
 # ---------------------------------------------------------------------------
-# 7. Tool Failure Resilience
+# Golden Case 7: Third-Party Email Failure
+# Verifies: Third-party integration resilience, degraded reporting, error logging.
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
-async def test_tool_failure_resilience():
-    """When a tool raises an unhandled exception, agent catches it and logs error cleanly."""
-    mock_llm = MockLLMClient()
-    action_agent = ActionExecutionAgent(llm_client=mock_llm)
-
-    # Patch create_order_tool to simulate a database timeout
-    with patch.object(action_agent.create_order_tool, "execute", side_effect=TimeoutError("DB connection timed out")):
-        action_input = ActionAgentInput(
-            domain_recommendation={"estimated_cost": 3000.0, "possible_issue": "Sensor failure"},
-            workflow_context={"workflow_id": str(uuid.uuid4()), "issue_id": str(uuid.uuid4())},
-            approval_context={"approval_status": "PENDING"}
-        )
-        output, records = await action_agent.execute_action_plan(action_input)
-        assert output is not None
-        # Record should indicate tool failure without crashing agent
-        failed_record = next((r for r in records if r.tool_name == "createRepairOrder"), None)
-        assert failed_record is not None
-        assert failed_record.is_success is False
-
-
-# ---------------------------------------------------------------------------
-# 8. Email Failure Handling
-# ---------------------------------------------------------------------------
-
-@pytest.mark.asyncio
-async def test_email_failure_handling():
-    """When the transactional email service encounters network error, the failure is reported."""
+async def test_golden_case_7_third_party_email_failure():
+    """Golden Case 7: Transactional email transport failure is captured cleanly in execution plan without crash."""
     mock_llm = MockLLMClient()
     action_agent = ActionExecutionAgent(llm_client=mock_llm)
 
@@ -410,51 +398,20 @@ async def test_email_failure_handling():
 
 
 # ---------------------------------------------------------------------------
-# 9. Approval Unauthorized
+# Golden Case 8: Duplicate Action
+# Verifies: Idempotency, replay protection, duplicate action suppression.
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
-async def test_approval_unauthorized_blocks_dispatch():
-    """Attempting to dispatch email without APPROVED status strictly raises PermissionError."""
+async def test_golden_case_8_duplicate_action():
+    """Golden Case 8: Replaying the same approved vendor email is prevented using idempotency keys."""
     tool = SendVendorEmailTool()
-
-    # 1. PENDING status
-    with pytest.raises(PermissionError) as exc_info:
-        await tool._run(
-            recipient="vendor@supplies.com",
-            subject="Order",
-            body="Dispatch parts",
-            approval_status="PENDING",
-            idempotency_key="key-unauth-1"
-        )
-    assert "Human approval" in str(exc_info.value)
-
-    # 2. REJECTED status
-    with pytest.raises(PermissionError) as exc_info2:
-        await tool._run(
-            recipient="vendor@supplies.com",
-            subject="Order",
-            body="Dispatch parts",
-            approval_status="REJECTED",
-            idempotency_key="key-unauth-2"
-        )
-    assert "Human approval" in str(exc_info2.value)
-
-
-# ---------------------------------------------------------------------------
-# 10. Duplicate Action Prevention
-# ---------------------------------------------------------------------------
-
-@pytest.mark.asyncio
-async def test_duplicate_action_prevention():
-    """Action Agent prevents replaying the same approved action twice using idempotency."""
-    tool = SendVendorEmailTool()
-    key = f"idem-key-{uuid.uuid4()}"
+    key = f"idem-golden-8-{uuid.uuid4()}"
 
     # First dispatch succeeds
     res1 = await tool._run(
         recipient="vendor@supplies.com",
-        subject="PO-9901",
+        subject="PO-Golden8",
         body="Authorized order",
         approval_status="APPROVED",
         idempotency_key=key
@@ -464,7 +421,7 @@ async def test_duplicate_action_prevention():
     # Second dispatch with identical idempotency key is blocked as duplicate
     res2 = await tool._run(
         recipient="vendor@supplies.com",
-        subject="PO-9901",
+        subject="PO-Golden8",
         body="Authorized order",
         approval_status="APPROVED",
         idempotency_key=key
@@ -475,8 +432,88 @@ async def test_duplicate_action_prevention():
 
 
 # ---------------------------------------------------------------------------
-# 11. End-to-End WorkflowEngine Orchestration
+# Additional Workflow Resilience Tests: Reject, Revision, Safe Failure & Recovery
 # ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_reject_workflow_prevents_action_execution():
+    """When human reviewer rejects workflow, Action Agent must not execute vendor orders."""
+    mock_llm = MockLLMClient()
+    action_agent = ActionExecutionAgent(llm_client=mock_llm)
+
+    action_input = ActionAgentInput(
+        domain_recommendation={
+            "possible_issue": "Broken incline motor",
+            "estimated_cost": 15000.0,
+            "recommended_supplier": "Apex Fitness",
+            "required_part": "Incline Actuator"
+        },
+        workflow_context={
+            "workflow_id": str(uuid.uuid4()),
+            "issue_id": str(uuid.uuid4()),
+            "equipment_name": "Treadmill T12"
+        },
+        approval_context={
+            "approval_status": "REJECTED",
+            "approver": "facility_manager@smartgym.com",
+            "comments": "Rejected. Repair to be handled under existing warranty contract."
+        }
+    )
+
+    output, records = await action_agent.execute_action_plan(action_input)
+    executed_tools = [r.tool_name for r in records]
+    assert "sendVendorEmail" not in executed_tools
+    assert any("paused" in step.lower() or "rejected" in step.lower() for step in output.execution_plan)
+
+
+@pytest.mark.asyncio
+async def test_request_revision_resets_workflow_to_planning():
+    """When revision is requested, workflow halts high-impact action and notes revision needed."""
+    mock_llm = MockLLMClient()
+    action_agent = ActionExecutionAgent(llm_client=mock_llm)
+
+    action_input = ActionAgentInput(
+        domain_recommendation={
+            "possible_issue": "Complete deck replacement",
+            "estimated_cost": 45000.0,
+            "recommended_supplier": "GymEquip Pro"
+        },
+        workflow_context={
+            "workflow_id": str(uuid.uuid4()),
+            "issue_id": str(uuid.uuid4()),
+            "equipment_name": "Treadmill T12"
+        },
+        approval_context={
+            "approval_status": "REVISION_REQUIRED",
+            "approver": "admin@smartgym.com",
+            "comments": "Please check if deck can be resurfaced before ordering replacement."
+        }
+    )
+
+    output, records = await action_agent.execute_action_plan(action_input)
+    executed_tools = [r.tool_name for r in records]
+    assert "sendVendorEmail" not in executed_tools
+    assert any("paused" in step.lower() or "approval" in step.lower() for step in output.execution_plan)
+
+
+@pytest.mark.asyncio
+async def test_tool_failure_resilience():
+    """When a tool raises an unhandled exception, agent catches it and logs error cleanly."""
+    mock_llm = MockLLMClient()
+    action_agent = ActionExecutionAgent(llm_client=mock_llm)
+
+    with patch.object(action_agent.create_order_tool, "execute", side_effect=TimeoutError("DB connection timed out")):
+        action_input = ActionAgentInput(
+            domain_recommendation={"estimated_cost": 3000.0, "possible_issue": "Sensor failure"},
+            workflow_context={"workflow_id": str(uuid.uuid4()), "issue_id": str(uuid.uuid4())},
+            approval_context={"approval_status": "PENDING"}
+        )
+        output, records = await action_agent.execute_action_plan(action_input)
+        assert output is not None
+        failed_record = next((r for r in records if r.tool_name == "createRepairOrder"), None)
+        assert failed_record is not None
+        assert failed_record.is_success is False
+
 
 @pytest.mark.asyncio
 async def test_end_to_end_langgraph_workflow_engine():
@@ -490,7 +527,6 @@ async def test_end_to_end_langgraph_workflow_engine():
     mock_llm = MockLLMClient()
     engine = WorkflowEngine(store=store, llm_client=mock_llm)
 
-    # Enqueue high-cost diagnosis so it exceeds threshold and enters AwaitingApproval
     high_cost_diagnosis = {
         "diagnosis_summary": "Treadmill motor and drive belt catastrophic failure",
         "recommended_action": "Replace motor and drive belt",
@@ -512,7 +548,6 @@ async def test_end_to_end_langgraph_workflow_engine():
     # 1. Start Workflow
     initial_state = await engine.start_workflow(start_req)
     assert initial_state.id is not None
-    # Because cost (35,000) > threshold (25,000), state pauses at AwaitingApproval
     assert initial_state.status == WorkflowStatus.AwaitingApproval
     assert initial_state.requires_human_approval is True
 

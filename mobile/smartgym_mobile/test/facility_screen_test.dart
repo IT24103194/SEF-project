@@ -51,6 +51,16 @@ class MockFacilityApiService extends FacilityApiService {
   }) async {
     return true;
   }
+
+  @override
+  Future<Map<String, dynamic>?> fetchWorkflowStatus(String issueId) async {
+    return {
+      'status': 'REPAIR_SCHEDULED',
+      'diagnosisSummary': 'Drive belt replacement required',
+      'recommendedAction': 'Replace belt and calibrate tension',
+      'repairOrderId': 'ro-123',
+    };
+  }
 }
 
 void main() {

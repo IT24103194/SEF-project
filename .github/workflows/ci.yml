@@ -1,10 +1,10 @@
-name: SmartGym CI Pipeline
+name: SmartGym CI/CD Pipeline
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main, develop, IT24103194]
   pull_request:
-    branches: [main, develop]
+    branches: [main]
 
 jobs:
   backend-ci:
@@ -29,11 +29,8 @@ jobs:
         run: dotnet test SmartGym.sln --no-build --configuration Release --verbosity normal
 
   ai-service-ci:
-    name: AI Microservice CI (Python 3.12/3.13)
+    name: AI Microservice CI (Python & LangGraph)
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./ai-service
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -46,15 +43,15 @@ jobs:
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-          pip install pytest
+          if [ -f ai-service/requirements.txt ]; then pip install -r ai-service/requirements.txt; fi
+          pip install pytest pytest-asyncio
 
-      - name: Run AI Unit Tests
+      - name: Run AI Microservice & Multi-Agent Tests
         run: |
-          if [ -d tests ]; then pytest tests; else echo "No AI tests directory yet"; fi
+          pytest tests/ai -v
 
   frontend-ci:
-    name: Frontend Web CI (React)
+    name: Frontend Web CI (React & Vite)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -69,9 +66,72 @@ jobs:
           node-version: '20'
 
       - name: Install Dependencies
-        run: |
-          if [ -f package.json ]; then npm ci || npm install; fi
+        run: npm ci || npm install
 
-      - name: Build React Web App
-        run: |
-          if [ -f package.json ]; then npm run build; fi
+      - name: Run React Component & Integration Tests
+        run: npm test
+
+      - name: Build React Production Bundle
+        run: npm run build
+
+  flutter-ci:
+    name: Flutter Mobile CI (Analyze & Test)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./mobile/smartgym_mobile
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.x'
+          channel: 'stable'
+
+      - name: Install Flutter Dependencies
+        run: flutter pub get
+
+      - name: Run Flutter Unit & Widget Tests
+        run: flutter test
+
+  docker-build-ci:
+    name: Docker Container Build Verification
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Backend Docker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./backend/SmartGym.Api/Dockerfile
+          push: false
+          tags: smartgym-api:latest
+
+      - name: Build AI Microservice Docker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./ai-service
+          file: ./ai-service/Dockerfile
+          push: false
+          tags: smartgym-ai:latest
+
+      - name: Build Frontend Web Docker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend-web/smartgym-web
+          file: ./frontend-web/smartgym-web/Dockerfile
+          push: false
+          tags: smartgym-web:latest

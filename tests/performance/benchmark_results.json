@@ -1,0 +1,24 @@
+{
+  "database_benchmark": {
+    "iterations": 50,
+    "min_ms": 0.075,
+    "mean_ms": 0.304,
+    "p50_ms": 0.111,
+    "p95_ms": 1.523,
+    "max_ms": 5.068,
+    "success_rate_percent": 100.0,
+    "failure_rate_percent": 0.0
+  },
+  "ai_service_benchmark": {
+    "total_requests": 24,
+    "concurrency": 8,
+    "total_duration_ms": 24699.79,
+    "min_ms": 7486.156,
+    "mean_ms": 8032.883,
+    "p50_ms": 7805.864,
+    "p95_ms": 8762.228,
+    "max_ms": 8762.609,
+    "success_rate_percent": 100.0,
+    "failure_rate_percent": 0.0
+  }
+}
