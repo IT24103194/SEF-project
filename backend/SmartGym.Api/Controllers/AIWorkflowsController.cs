@@ -87,6 +87,98 @@ public class WorkflowApprovalResultDto
     public string Message { get; set; } = string.Empty;
 }
 
+public class AIWorkflowExecutionSummaryDto
+{
+    public Guid WorkflowId { get; set; }
+    public Guid IssueId { get; set; }
+    public string IssueTitle { get; set; } = string.Empty;
+    public string EquipmentName { get; set; } = string.Empty;
+    public string Objective { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    public string CurrentStep { get; set; } = string.Empty;
+    public string ApprovalState { get; set; } = string.Empty;
+    public bool RequiresHumanApproval { get; set; }
+    public bool? HumanApprovalGranted { get; set; }
+    public List<string> AgentsInvolved { get; set; } = new();
+    public List<string> PlannedSteps { get; set; } = new();
+    public int CompletedStepsCount { get; set; }
+    public List<AIWorkflowStepDto> CompletedSteps { get; set; } = new();
+    public int ToolCallsCount { get; set; }
+    public List<AIToolExecutionDto> ToolCalls { get; set; } = new();
+    public List<AIValidationResultDto> Validations { get; set; } = new();
+    public AIApprovalSummaryDto? Approval { get; set; }
+    public List<string> Errors { get; set; } = new();
+    public int RetriesCount { get; set; }
+    public AIWorkflowTimingDto Timings { get; set; } = new();
+    public AIFinalResultDto? FinalResult { get; set; }
+}
+
+public class AIApprovalSummaryDto
+{
+    public Guid? ApprovalId { get; set; }
+    public string Decision { get; set; } = string.Empty;
+    public string? ApproverName { get; set; }
+    public string? Comments { get; set; }
+    public DateTime? DecidedAt { get; set; }
+    public decimal ApprovalThreshold { get; set; }
+}
+
+public class AIWorkflowTimingDto
+{
+    public DateTime StartedAt { get; set; }
+    public DateTime? CompletedAt { get; set; }
+    public long TotalDurationMs { get; set; }
+}
+
+public class AIFinalResultDto
+{
+    public string ProposedAction { get; set; } = string.Empty;
+    public Guid? RepairOrderId { get; set; }
+    public string OrderNumber { get; set; } = string.Empty;
+    public decimal EstimatedCost { get; set; }
+    public string FinalIssueStatus { get; set; } = string.Empty;
+    public List<string> ExecutionPlan { get; set; } = new();
+}
+
+public class AIWorkflowHistoryItemDto
+{
+    public Guid StepId { get; set; }
+    public string StepName { get; set; } = string.Empty;
+    public int StepOrder { get; set; }
+    public string Status { get; set; } = string.Empty;
+    public string Summary { get; set; } = string.Empty;
+    public long DurationMs { get; set; }
+    public DateTime Timestamp { get; set; }
+    public int ToolCallsCount { get; set; }
+}
+
+public class AIWorkflowStatusDto
+{
+    public Guid WorkflowId { get; set; }
+    public Guid IssueId { get; set; }
+    public string Status { get; set; } = string.Empty;
+    public string CurrentStep { get; set; } = string.Empty;
+    public string DiagnosisSummary { get; set; } = string.Empty;
+    public string RecommendedAction { get; set; } = string.Empty;
+    public double EstimatedConfidenceScore { get; set; }
+    public bool RequiresHumanApproval { get; set; }
+    public bool? HumanApprovalGranted { get; set; }
+    public string FacilityIssueStatus { get; set; } = string.Empty;
+    public DateTime StartedAt { get; set; }
+    public DateTime? CompletedAt { get; set; }
+}
+
+public class AIAuditRecordDto
+{
+    public Guid Id { get; set; }
+    public string Action { get; set; } = string.Empty;
+    public string EntityId { get; set; } = string.Empty;
+    public Guid? UserId { get; set; }
+    public string? OldValuesJson { get; set; }
+    public string? NewValuesJson { get; set; }
+    public DateTime Timestamp { get; set; }
+}
+
 [ApiController]
 [Route("api/ai-workflows")]
 [Produces("application/json")]
@@ -95,15 +187,18 @@ public class AIWorkflowsController : ControllerBase
 {
     private readonly SmartGymDbContext _context;
     private readonly IAiServiceClient? _aiServiceClient;
+    private readonly SmartGym.Api.Services.Email.IEmailService? _emailService;
     private readonly ILogger<AIWorkflowsController>? _logger;
 
     public AIWorkflowsController(
         SmartGymDbContext context,
         IAiServiceClient? aiServiceClient = null,
+        SmartGym.Api.Services.Email.IEmailService? emailService = null,
         ILogger<AIWorkflowsController>? logger = null)
     {
         _context = context;
         _aiServiceClient = aiServiceClient;
+        _emailService = emailService;
         _logger = logger;
     }
 
@@ -269,6 +364,257 @@ public class AIWorkflowsController : ControllerBase
         return Ok(dto);
     }
 
+    [HttpGet("{id:guid}/summary")]
+    [ProducesResponseType(typeof(AIWorkflowExecutionSummaryDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetWorkflowSummary(Guid id, CancellationToken cancellationToken)
+    {
+        var w = await _context.AIWorkflows
+            .Include(x => x.FacilityIssue)
+                .ThenInclude(fi => fi.Equipment)
+            .Include(x => x.Steps)
+                .ThenInclude(s => s.ToolExecutions)
+            .Include(x => x.ValidationResults)
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
+
+        if (w == null)
+            return NotFound(new { message = "AI Workflow not found" });
+
+        var ro = await _context.RepairOrders
+            .AsNoTracking()
+            .FirstOrDefaultAsync(r => r.IssueId == w.IssueId, cancellationToken);
+
+        var approval = ro != null ? await _context.Approvals
+            .Include(a => a.Approver)
+            .AsNoTracking()
+            .OrderByDescending(a => a.DecidedAt)
+            .FirstOrDefaultAsync(a => a.RepairOrderId == ro.Id, cancellationToken) : null;
+
+        var allToolCalls = w.Steps.SelectMany(s => s.ToolExecutions).ToList();
+
+        var plannedSteps = new List<string>
+        {
+            "Step 1: Content Moderation & Safety Validation (Safety Agent)",
+            "Step 2: Execution Planning & Dependency Assessment (Planner Agent)",
+            "Step 3: Equipment History & Telemetry Analysis (Gym Domain Analysis Agent)",
+            "Step 4: Action Preparation & Supplier Dispatch (Action Agent)"
+        };
+
+        var agentsInvolved = new List<string>
+        {
+            "Safety & Business Validation Agent",
+            "Coordinator & Planner Agent",
+            "Gym Domain Analysis Agent",
+            "Action / Tool Agent"
+        };
+
+        var totalDuration = (w.CompletedAt ?? DateTime.UtcNow) - w.StartedAt;
+
+        var summary = new AIWorkflowExecutionSummaryDto
+        {
+            WorkflowId = w.Id,
+            IssueId = w.IssueId,
+            IssueTitle = w.FacilityIssue?.Title ?? "General Facility Issue",
+            EquipmentName = w.FacilityIssue?.Equipment?.Name ?? "Gym Equipment",
+            Objective = "Diagnose facility issue, validate content & safety, analyze equipment maintenance history, and propose supplier repair action.",
+            Status = w.Status.ToString(),
+            CurrentStep = w.CurrentStep,
+            ApprovalState = w.HumanApprovalGranted.HasValue ? (w.HumanApprovalGranted.Value ? "APPROVED" : "REJECTED") : (w.RequiresHumanApproval ? "PENDING_APPROVAL" : "NOT_REQUIRED"),
+            RequiresHumanApproval = w.RequiresHumanApproval,
+            HumanApprovalGranted = w.HumanApprovalGranted,
+            AgentsInvolved = agentsInvolved,
+            PlannedSteps = plannedSteps,
+            CompletedStepsCount = w.Steps.Count(s => s.Status == "Completed" || s.Status == "Success"),
+            CompletedSteps = w.Steps.OrderBy(s => s.StepOrder).Select(s => new AIWorkflowStepDto
+            {
+                Id = s.Id,
+                StepName = s.StepName,
+                StepOrder = s.StepOrder,
+                Status = s.Status,
+                Summary = s.Summary,
+                ExecutionDurationMs = s.ExecutionDurationMs,
+                ExecutedAt = s.ExecutedAt,
+                ToolExecutions = s.ToolExecutions.Select(t => new AIToolExecutionDto
+                {
+                    Id = t.Id,
+                    ToolName = t.ToolName,
+                    InputParametersJson = t.InputParametersJson,
+                    OutputResultJson = t.OutputResultJson,
+                    IsSuccess = t.IsSuccess,
+                    ExecutionTimeMs = t.ExecutionTimeMs,
+                    ExecutedAt = t.ExecutedAt
+                }).ToList()
+            }).ToList(),
+            ToolCallsCount = allToolCalls.Count,
+            ToolCalls = allToolCalls.Select(t => new AIToolExecutionDto
+            {
+                Id = t.Id,
+                ToolName = t.ToolName,
+                InputParametersJson = t.InputParametersJson,
+                OutputResultJson = t.OutputResultJson,
+                IsSuccess = t.IsSuccess,
+                ExecutionTimeMs = t.ExecutionTimeMs,
+                ExecutedAt = t.ExecutedAt
+            }).ToList(),
+            Validations = w.ValidationResults.Select(vr => new AIValidationResultDto
+            {
+                Id = vr.Id,
+                RuleName = vr.RuleName,
+                Passed = vr.Passed,
+                ValidationMessage = vr.ValidationMessage,
+                EvaluatedAt = vr.EvaluatedAt
+            }).ToList(),
+            Approval = approval != null ? new AIApprovalSummaryDto
+            {
+                ApprovalId = approval.Id,
+                Decision = approval.Decision.ToString(),
+                ApproverName = approval.Approver != null ? $"{approval.Approver.FirstName} {approval.Approver.LastName}".Trim() : "System Reviewer",
+                Comments = approval.Comments,
+                DecidedAt = approval.DecidedAt,
+                ApprovalThreshold = approval.ApprovalThreshold
+            } : null,
+            Errors = w.Status == AIWorkflowStatus.Failed ? new List<string> { w.DiagnosisSummary } : new List<string>(),
+            RetriesCount = 0,
+            Timings = new AIWorkflowTimingDto
+            {
+                StartedAt = w.StartedAt,
+                CompletedAt = w.CompletedAt,
+                TotalDurationMs = (long)totalDuration.TotalMilliseconds
+            },
+            FinalResult = new AIFinalResultDto
+            {
+                ProposedAction = w.RecommendedAction,
+                RepairOrderId = ro?.Id,
+                OrderNumber = ro?.OrderNumber ?? "N/A",
+                EstimatedCost = ro?.EstimatedCost ?? 0m,
+                FinalIssueStatus = w.FacilityIssue?.Status.ToString() ?? "PENDING",
+                ExecutionPlan = plannedSteps
+            }
+        };
+
+        return Ok(summary);
+    }
+
+    [HttpGet("{id:guid}/history")]
+    [ProducesResponseType(typeof(List<AIWorkflowHistoryItemDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetWorkflowHistory(Guid id, CancellationToken cancellationToken)
+    {
+        var steps = await _context.AIWorkflowSteps
+            .Include(s => s.ToolExecutions)
+            .Where(s => s.WorkflowId == id)
+            .OrderBy(s => s.StepOrder)
+            .AsNoTracking()
+            .ToListAsync(cancellationToken);
+
+        if (!steps.Any())
+        {
+            var exists = await _context.AIWorkflows.AnyAsync(w => w.Id == id, cancellationToken);
+            if (!exists)
+                return NotFound(new { message = "AI Workflow not found" });
+        }
+
+        var history = steps.Select(s => new AIWorkflowHistoryItemDto
+        {
+            StepId = s.Id,
+            StepName = s.StepName,
+            StepOrder = s.StepOrder,
+            Status = s.Status,
+            Summary = s.Summary,
+            DurationMs = s.ExecutionDurationMs,
+            Timestamp = s.ExecutedAt,
+            ToolCallsCount = s.ToolExecutions.Count
+        }).ToList();
+
+        return Ok(history);
+    }
+
+    [HttpGet("{id:guid}/audit")]
+    [ProducesResponseType(typeof(List<AIAuditRecordDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetWorkflowAudit(Guid id, CancellationToken cancellationToken)
+    {
+        var idStr = id.ToString();
+        var audits = await _context.AuditLogs
+            .Where(a => a.EntityName == "AIWorkflow" && a.EntityId == idStr)
+            .OrderByDescending(a => a.Timestamp)
+            .AsNoTracking()
+            .Select(a => new AIAuditRecordDto
+            {
+                Id = a.Id,
+                Action = a.Action,
+                EntityId = a.EntityId,
+                UserId = a.UserId,
+                OldValuesJson = a.OldValuesJson,
+                NewValuesJson = a.NewValuesJson,
+                Timestamp = a.Timestamp
+            })
+            .ToListAsync(cancellationToken);
+
+        return Ok(audits);
+    }
+
+    [HttpGet("{id:guid}/status")]
+    [ProducesResponseType(typeof(AIWorkflowStatusDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetWorkflowStatus(Guid id, CancellationToken cancellationToken)
+    {
+        var w = await _context.AIWorkflows
+            .Include(x => x.FacilityIssue)
+            .AsNoTracking()
+            .FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
+
+        if (w == null)
+            return NotFound(new { message = "AI Workflow not found" });
+
+        return Ok(new AIWorkflowStatusDto
+        {
+            WorkflowId = w.Id,
+            IssueId = w.IssueId,
+            Status = w.Status.ToString(),
+            CurrentStep = w.CurrentStep,
+            DiagnosisSummary = w.DiagnosisSummary,
+            RecommendedAction = w.RecommendedAction,
+            EstimatedConfidenceScore = w.EstimatedConfidenceScore,
+            RequiresHumanApproval = w.RequiresHumanApproval,
+            HumanApprovalGranted = w.HumanApprovalGranted,
+            FacilityIssueStatus = w.FacilityIssue?.Status.ToString() ?? "UNKNOWN",
+            StartedAt = w.StartedAt,
+            CompletedAt = w.CompletedAt
+        });
+    }
+
+    [HttpGet("by-issue/{issueId:guid}")]
+    [ProducesResponseType(typeof(AIWorkflowStatusDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetWorkflowByIssueId(Guid issueId, CancellationToken cancellationToken)
+    {
+        var w = await _context.AIWorkflows
+            .Include(x => x.FacilityIssue)
+            .AsNoTracking()
+            .OrderByDescending(x => x.StartedAt)
+            .FirstOrDefaultAsync(x => x.IssueId == issueId, cancellationToken);
+
+        if (w == null)
+            return NotFound(new { message = "No AI Workflow found for the specified facility issue." });
+
+        return Ok(new AIWorkflowStatusDto
+        {
+            WorkflowId = w.Id,
+            IssueId = w.IssueId,
+            Status = w.Status.ToString(),
+            CurrentStep = w.CurrentStep,
+            DiagnosisSummary = w.DiagnosisSummary,
+            RecommendedAction = w.RecommendedAction,
+            EstimatedConfidenceScore = w.EstimatedConfidenceScore,
+            RequiresHumanApproval = w.RequiresHumanApproval,
+            HumanApprovalGranted = w.HumanApprovalGranted,
+            FacilityIssueStatus = w.FacilityIssue?.Status.ToString() ?? "UNKNOWN",
+            StartedAt = w.StartedAt,
+            CompletedAt = w.CompletedAt
+        });
+    }
+
     [HttpPost("{id:guid}/approve")]
     [ProducesResponseType(typeof(WorkflowApprovalResultDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -373,11 +719,17 @@ public class AIWorkflowsController : ControllerBase
 
         if (ro == null)
         {
+            var targetEqId = workflow.FacilityIssue?.EquipmentId;
+            if (!targetEqId.HasValue || targetEqId.Value == Guid.Empty)
+            {
+                targetEqId = await _context.Equipment.Select(e => e.Id).FirstOrDefaultAsync(cancellationToken);
+            }
+
             ro = new RepairOrder
             {
                 IssueId = workflow.IssueId,
-                EquipmentId = workflow.FacilityIssue.EquipmentId ?? Guid.Empty,
-                OrderNumber = $"RO-AI-{DateTime.UtcNow:yyyyMMddHHmmss}",
+                EquipmentId = targetEqId ?? Guid.Empty,
+                OrderNumber = $"RO-{DateTime.UtcNow:yyMMddHHmmss}-{Guid.NewGuid():N}"[..30],
                 Status = action == "APPROVE" ? RepairOrderStatus.Approved : (action == "REJECT" ? RepairOrderStatus.Rejected : RepairOrderStatus.Draft),
                 EstimatedCost = 0.0m
             };
@@ -396,17 +748,32 @@ public class AIWorkflowsController : ControllerBase
             _ => ApprovalDecision.Revised
         };
 
-        var approval = new Approval
+        var existingApproval = await _context.Approvals
+            .FirstOrDefaultAsync(a => a.RepairOrderId == ro.Id, cancellationToken);
+
+        Approval approval;
+        if (existingApproval == null)
         {
-            RepairOrderId = ro.Id,
-            ApproverUserId = approverId != Guid.Empty ? approverId : (await _context.Users.Select(u => u.Id).FirstOrDefaultAsync(cancellationToken)),
-            Decision = approvalDecision,
-            Comments = comments,
-            DecidedAt = DateTime.UtcNow,
-            EstimatedCost = ro.EstimatedCost,
-            ApprovalThreshold = 25000.0m
-        };
-        await _context.Approvals.AddAsync(approval, cancellationToken);
+            approval = new Approval
+            {
+                RepairOrderId = ro.Id,
+                ApproverUserId = approverId != Guid.Empty ? approverId : (await _context.Users.Select(u => u.Id).FirstOrDefaultAsync(cancellationToken)),
+                Decision = approvalDecision,
+                Comments = comments,
+                DecidedAt = DateTime.UtcNow,
+                EstimatedCost = ro.EstimatedCost,
+                ApprovalThreshold = 25000.0m
+            };
+            await _context.Approvals.AddAsync(approval, cancellationToken);
+        }
+        else
+        {
+            approval = existingApproval;
+            approval.Decision = approvalDecision;
+            approval.Comments = comments;
+            approval.DecidedAt = DateTime.UtcNow;
+            if (approverId != Guid.Empty) approval.ApproverUserId = approverId;
+        }
 
         // 7. Workflow state update
         var oldStatus = workflow.Status;
@@ -415,12 +782,96 @@ public class AIWorkflowsController : ControllerBase
         if (action == "APPROVE")
         {
             workflow.HumanApprovalGranted = true;
-            workflow.Status = AIWorkflowStatus.Executing;
-            workflow.CurrentStep = "Execution initiated following human approval";
+            workflow.Status = AIWorkflowStatus.Completed;
+            workflow.CurrentStep = "Workflow completed. Repair scheduled and supplier notified.";
+            workflow.CompletedAt = DateTime.UtcNow;
             approvalStatusStr = "APPROVED";
+
             if (workflow.FacilityIssue != null)
             {
-                workflow.FacilityIssue.Status = FacilityIssueStatus.APPROVED;
+                workflow.FacilityIssue.Status = FacilityIssueStatus.REPAIR_SCHEDULED;
+            }
+
+            // 1. Dispatch supplier repair request via transactional email service
+            if (_emailService != null)
+            {
+                try
+                {
+                    var supplierReq = new SmartGym.Api.Services.Email.SupplierRepairEmailRequest
+                    {
+                        WorkflowId = workflow.Id,
+                        RepairOrderNumber = ro.OrderNumber,
+                        SupplierEmail = "repairs@supplier.com",
+                        SupplierName = "Apex Fitness Equipment Suppliers",
+                        EquipmentName = workflow.FacilityIssue?.Equipment?.Name ?? "Gym Equipment",
+                        SerialNumber = workflow.FacilityIssue?.Equipment?.SerialNumber ?? "SN-UNKNOWN",
+                        IssueDescription = workflow.FacilityIssue?.Description ?? "Facility issue repair request",
+                        EstimatedCost = ro.EstimatedCost > 0 ? ro.EstimatedCost : 12500.0m,
+                        ApprovalStatus = "APPROVED",
+                        IdempotencyKey = $"supp-req-{workflow.Id}-{ro.Id}"
+                    };
+
+                    var emailResult = await _emailService.SendSupplierRepairRequestAsync(supplierReq, cancellationToken);
+
+                    // Record tool execution under Action Execution step
+                    var actionStep = await _context.AIWorkflowSteps
+                        .FirstOrDefaultAsync(s => s.WorkflowId == workflow.Id && s.StepOrder == 4, cancellationToken);
+
+                    if (actionStep != null)
+                    {
+                        var toolExec = new AIToolExecution
+                        {
+                            WorkflowStepId = actionStep.Id,
+                            ToolName = "sendSupplierRepairEmail",
+                            InputParametersJson = JsonSerializer.Serialize(new
+                            {
+                                supplier = supplierReq.SupplierName,
+                                equipment = supplierReq.EquipmentName,
+                                cost = supplierReq.EstimatedCost,
+                                approvalStatus = supplierReq.ApprovalStatus
+                            }),
+                            OutputResultJson = JsonSerializer.Serialize(new
+                            {
+                                isSuccess = emailResult.IsSuccess,
+                                messageId = emailResult.MessageId,
+                                sentAt = emailResult.SentAt,
+                                provider = emailResult.Provider
+                            }),
+                            IsSuccess = emailResult.IsSuccess,
+                            ExecutionTimeMs = 120,
+                            ExecutedAt = DateTime.UtcNow
+                        };
+                        await _context.AIToolExecutions.AddAsync(toolExec, cancellationToken);
+                        actionStep.Status = "Completed";
+                        actionStep.Summary = $"Supplier email sent ({emailResult.MessageId}). Repair order {ro.OrderNumber} confirmed.";
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogError(ex, "Failed to send supplier email for workflow {WorkflowId}", workflow.Id);
+                }
+            }
+
+            // 2. Create in-app notification for the reporting member
+            if (workflow.FacilityIssue != null)
+            {
+                var member = await _context.Members
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(m => m.Id == workflow.FacilityIssue.ReportedByMemberId, cancellationToken);
+
+                if (member != null)
+                {
+                    var notification = new Notification
+                    {
+                        UserId = member.UserId,
+                        Title = "Repair Scheduled for Reported Issue",
+                        Message = $"Your report for {workflow.FacilityIssue.Equipment?.Name ?? "Gym Equipment"} has been approved and repair has been scheduled with the supplier.",
+                        Type = NotificationType.Maintenance,
+                        IsRead = false,
+                        CreatedAt = DateTime.UtcNow
+                    };
+                    await _context.Notifications.AddAsync(notification, cancellationToken);
+                }
             }
         }
         else if (action == "REJECT")

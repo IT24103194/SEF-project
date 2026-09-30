@@ -58,6 +58,8 @@ builder.Services.AddScoped<IMembershipService, MembershipService>();
 builder.Services.AddScoped<IAuditService, AuditService>();
 builder.Services.AddScoped<IReportingService, ReportingService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
+builder.Services.AddScoped<SmartGym.Api.Services.Email.IEmailService, SmartGym.Api.Services.Email.LocalDevelopmentEmailService>();
+builder.Services.AddHttpClient<SmartGym.Api.Services.Email.ExternalEmailService>();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddHttpClient<IAiServiceClient, AiServiceClient>();
 

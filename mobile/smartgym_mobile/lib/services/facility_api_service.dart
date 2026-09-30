@@ -98,4 +98,12 @@ class FacilityApiService {
     final response = await http.Response.fromStream(streamedResponse);
     return response.statusCode == 200 || response.statusCode == 201;
   }
+
+  Future<Map<String, dynamic>?> fetchWorkflowStatus(String issueId) async {
+    final response = await _api.get('/facility-issues/$issueId/workflow');
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    }
+    return null;
+  }
 }

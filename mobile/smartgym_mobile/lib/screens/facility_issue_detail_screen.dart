@@ -15,6 +15,7 @@ class FacilityIssueDetailScreen extends ConsumerStatefulWidget {
 class _FacilityIssueDetailScreenState extends ConsumerState<FacilityIssueDetailScreen> {
   FacilityIssueModel? _issue;
   List<IssueHistoryModel> _history = [];
+  Map<String, dynamic>? _workflow;
   bool _isLoading = true;
   String? _error;
 
@@ -34,10 +35,12 @@ class _FacilityIssueDetailScreenState extends ConsumerState<FacilityIssueDetailS
     try {
       final issue = await api.fetchIssueDetails(widget.issueId);
       final history = await api.fetchIssueHistory(widget.issueId);
+      final workflow = await api.fetchWorkflowStatus(widget.issueId);
       if (mounted) {
         setState(() {
           _issue = issue;
           _history = history;
+          _workflow = workflow;
           _isLoading = false;
         });
       }
@@ -229,6 +232,100 @@ class _FacilityIssueDetailScreenState extends ConsumerState<FacilityIssueDetailS
                         ),
                       ),
                       const SizedBox(height: 20),
+
+                      // AI Workflow Execution & Scheduled Repair Status
+                      if (_workflow != null) ...[
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF1E1B4B).withValues(alpha: 0.6),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: const Color(0xFF6366F1).withValues(alpha: 0.4)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  const Row(
+                                    children: [
+                                      Icon(Icons.auto_awesome, color: Color(0xFF818CF8), size: 18),
+                                      SizedBox(width: 8),
+                                      Text(
+                                        'SmartGym Agentic AI Diagnostics',
+                                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                                      ),
+                                    ],
+                                  ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: _getStatusColor(_workflow!['facilityIssueStatus']?.toString() ?? 'SUBMITTED').withValues(alpha: 0.2),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Text(
+                                      _workflow!['facilityIssueStatus']?.toString() ?? 'ANALYZING',
+                                      style: TextStyle(
+                                        color: _getStatusColor(_workflow!['facilityIssueStatus']?.toString() ?? 'SUBMITTED'),
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              if (_workflow!['diagnosisSummary'] != null) ...[
+                                Text(
+                                  _workflow!['diagnosisSummary'].toString(),
+                                  style: const TextStyle(color: Color(0xFFE2E8F0), fontSize: 13, height: 1.4),
+                                ),
+                                const SizedBox(height: 8),
+                              ],
+                              if (_workflow!['recommendedAction'] != null) ...[
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Icon(Icons.build_circle, color: Color(0xFF38BDF8), size: 16),
+                                    const SizedBox(width: 6),
+                                    Expanded(
+                                      child: Text(
+                                        'Action: ${_workflow!['recommendedAction']}',
+                                        style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                              if (_workflow!['facilityIssueStatus'] == 'REPAIR_SCHEDULED') ...[
+                                const SizedBox(height: 12),
+                                Container(
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFEC4899).withValues(alpha: 0.15),
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: const Color(0xFFEC4899).withValues(alpha: 0.3)),
+                                  ),
+                                  child: const Row(
+                                    children: [
+                                      Icon(Icons.check_circle_outline, color: Color(0xFFEC4899), size: 18),
+                                      SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          'Repair Approved & Scheduled with Supplier',
+                                          style: TextStyle(color: Color(0xFFEC4899), fontWeight: FontWeight.bold, fontSize: 12),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                      ],
 
                       // Resolution Data (if resolved)
                       if (_issue!.resolutionNotes != null && _issue!.resolutionNotes!.isNotEmpty) ...[

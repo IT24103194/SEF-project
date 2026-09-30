@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using SmartGym.Api.Authorization;
 using SmartGym.Api.DTOs.Common;
 using SmartGym.Api.DTOs.Facility;
@@ -183,5 +184,67 @@ public class FacilityIssuesController : ControllerBase
         var (userId, roles) = GetCurrentUserContext();
         var result = await _facilityService.GetIssueHistoryAsync(id, userId, roles, cancellationToken);
         return Ok(result);
+    }
+
+    /// <summary>
+    /// Retrieve the AI workflow execution status for a facility issue.
+    /// Used by Flutter mobile app to observe automated diagnosis, repair order, and repair scheduling status.
+    /// </summary>
+    [HttpGet("{id:guid}/workflow")]
+    [Authorize]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetIssueWorkflow(
+        Guid id,
+        [FromServices] SmartGym.Api.Data.SmartGymDbContext dbContext,
+        CancellationToken cancellationToken)
+    {
+        var (userId, roles) = GetCurrentUserContext();
+
+        var issue = await dbContext.FacilityIssues
+            .AsNoTracking()
+            .FirstOrDefaultAsync(i => i.Id == id, cancellationToken);
+
+        if (issue == null)
+            return NotFound(new { message = "Facility issue not found" });
+
+        var isStaffOrAdmin = roles.Contains(AppRoles.Admin) || roles.Contains("ADMIN") ||
+                             roles.Contains(AppRoles.Trainer) || roles.Contains("TRAINER") ||
+                             roles.Contains("Staff") || roles.Contains("STAFF") ||
+                             roles.Contains("FacilityManager") || roles.Contains("FACILITY_MANAGER");
+
+        var member = await dbContext.Members.AsNoTracking().FirstOrDefaultAsync(m => m.UserId == userId, cancellationToken);
+        if (!isStaffOrAdmin && (member == null || issue.ReportedByMemberId != member.Id))
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = "Forbidden: You are not authorized to view this issue's workflow." });
+        }
+
+        var workflow = await dbContext.AIWorkflows
+            .Include(w => w.FacilityIssue)
+            .AsNoTracking()
+            .OrderByDescending(w => w.StartedAt)
+            .FirstOrDefaultAsync(w => w.IssueId == id, cancellationToken);
+
+        if (workflow == null)
+        {
+            return NotFound(new { message = "No AI workflow found for this facility issue." });
+        }
+
+        return Ok(new
+        {
+            workflowId = workflow.Id,
+            issueId = workflow.IssueId,
+            status = workflow.Status.ToString(),
+            currentStep = workflow.CurrentStep,
+            diagnosisSummary = workflow.DiagnosisSummary,
+            recommendedAction = workflow.RecommendedAction,
+            estimatedConfidenceScore = workflow.EstimatedConfidenceScore,
+            requiresHumanApproval = workflow.RequiresHumanApproval,
+            humanApprovalGranted = workflow.HumanApprovalGranted,
+            facilityIssueStatus = workflow.FacilityIssue?.Status.ToString() ?? issue.Status.ToString(),
+            startedAt = workflow.StartedAt,
+            completedAt = workflow.CompletedAt
+        });
     }
 }

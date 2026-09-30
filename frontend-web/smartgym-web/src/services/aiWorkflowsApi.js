@@ -21,6 +21,26 @@ export const aiWorkflowsApi = {
     const response = await apiClient.post(`/ai-workflows/${id}/revise`, { comments });
     return response.data;
   },
+  getWorkflowSummary: async (id) => {
+    const response = await apiClient.get(`/ai-workflows/${id}/summary`);
+    return response.data;
+  },
+  getWorkflowHistory: async (id) => {
+    const response = await apiClient.get(`/ai-workflows/${id}/history`);
+    return response.data;
+  },
+  getWorkflowAudit: async (id) => {
+    const response = await apiClient.get(`/ai-workflows/${id}/audit`);
+    return response.data;
+  },
+  getWorkflowStatus: async (id) => {
+    const response = await apiClient.get(`/ai-workflows/${id}/status`);
+    return response.data;
+  },
+  getWorkflowByIssueId: async (issueId) => {
+    const response = await apiClient.get(`/ai-workflows/by-issue/${issueId}`);
+    return response.data;
+  },
 };
 
 export default aiWorkflowsApi;
