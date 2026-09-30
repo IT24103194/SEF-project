@@ -83,6 +83,21 @@ class MockLLMClient(ILLMClient):
                         elif schema and getattr(schema, "__name__", "") == "SafetyValidationOutput":
                             if "contentSafe" in parsed or "content_safe" in parsed or "sanitizedDescription" in parsed:
                                 return self.queued_responses.pop(i)
+                        elif schema and getattr(schema, "__name__", "") == "DomainAnalysisOutput":
+                            if "possibleIssue" in parsed or "possible_issue" in parsed or "priorityRecommendation" in parsed:
+                                return self.queued_responses.pop(i)
+                            elif "diagnosis_summary" in parsed or "diagnosis" in parsed or "estimated_cost" in parsed or "estimatedCost" in parsed:
+                                popped = json.loads(self.queued_responses.pop(i))
+                                return json.dumps({
+                                    "possibleIssue": popped.get("possibleIssue") or popped.get("possible_issue") or popped.get("diagnosis_summary") or popped.get("diagnosis") or "Issue",
+                                    "priorityRecommendation": popped.get("priorityRecommendation") or popped.get("priority_recommendation") or popped.get("severity") or "High",
+                                    "requiredPart": popped.get("requiredPart") or popped.get("required_part") or "OEM-PART",
+                                    "partAvailable": popped.get("partAvailable") if "partAvailable" in popped else popped.get("part_available", False),
+                                    "recommendedSupplier": popped.get("recommendedSupplier") or popped.get("recommended_supplier") or "LifeFitness",
+                                    "estimatedCost": float(popped.get("estimatedCost") or popped.get("estimated_cost") or 15000.0),
+                                    "recommendedAction": popped.get("recommendedAction") or popped.get("recommended_action") or "Action",
+                                    "supportingDataReferences": popped.get("supportingDataReferences") or popped.get("supporting_data_references") or []
+                                })
                         elif schema and getattr(schema, "__name__", "") == "DiagnosisOutputSchema":
                             if "estimated_cost" in parsed and ("diagnosis_summary" in parsed or "diagnosis" in parsed):
                                 return self.queued_responses.pop(i)
@@ -176,6 +191,23 @@ class MockLLMClient(ILLMClient):
                 "approvalRequired": False,
                 "issues": [],
                 "validationSummary": "All safety, content, and business validation rules successfully satisfied."
+            })
+
+        if schema and getattr(schema, "__name__", "") == "DomainAnalysisOutput":
+            return json.dumps({
+                "possibleIssue": "Drive belt wear or pulley bearing friction",
+                "priorityRecommendation": "Medium",
+                "requiredPart": "B-102",
+                "partAvailable": True,
+                "recommendedSupplier": "LifeFitness Certified Logistics",
+                "estimatedCost": 15000.0,
+                "recommendedAction": "Technician inspection and drive belt replacement",
+                "supportingDataReferences": [
+                    "Equipment Model: T-900 Pro (SN: SN-TM-2024-001)",
+                    "Previous repair order #RO-2024-001 showed pulley lubrication",
+                    "Inventory check: SKU B-102 available in Bin A-12",
+                    "Supplier: LifeFitness Certified Logistics"
+                ]
             })
 
         # Default fallback response for diagnosis

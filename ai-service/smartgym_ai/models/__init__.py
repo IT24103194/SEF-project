@@ -21,6 +21,10 @@ from smartgym_ai.models.safety_models import (
     SafetyValidationOutput,
     ContentModerationRecord,
 )
+from smartgym_ai.models.domain_models import (
+    DomainAnalysisInput,
+    DomainAnalysisOutput,
+)
 
 __all__ = [
     "WorkflowStatus",
@@ -40,4 +44,6 @@ __all__ = [
     "SafetyValidationInput",
     "SafetyValidationOutput",
     "ContentModerationRecord",
+    "DomainAnalysisInput",
+    "DomainAnalysisOutput",
 ]

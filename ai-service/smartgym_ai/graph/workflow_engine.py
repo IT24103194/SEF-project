@@ -22,7 +22,9 @@ from smartgym_ai.models.planner_models import (
 )
 from smartgym_ai.agents.planner_agent import PlannerAgent
 from smartgym_ai.agents.safety_validation_agent import SafetyValidationAgent
+from smartgym_ai.agents.domain_analysis_agent import DomainAnalysisAgent
 from smartgym_ai.models.safety_models import SafetyValidationInput, SafetyValidationOutput
+from smartgym_ai.models.domain_models import DomainAnalysisInput, DomainAnalysisOutput
 from smartgym_ai.services.state_store import IWorkflowStateStore, workflow_store
 from smartgym_ai.services.llm.factory import get_llm_client
 from smartgym_ai.services.llm.client_interface import ILLMClient
@@ -85,6 +87,7 @@ class WorkflowEngine:
         self.llm_client = llm_client or get_llm_client()
         self.planner_agent = PlannerAgent(self.llm_client)
         self.safety_agent = SafetyValidationAgent(self.llm_client)
+        self.domain_agent = DomainAnalysisAgent(self.llm_client)
         self.graph = self._build_graph()
 
     def _build_graph(self):
@@ -206,25 +209,36 @@ class WorkflowEngine:
             }
 
     async def _evaluate_diagnosis_node(self, state: WorkflowGraphState) -> dict[str, Any]:
+        """
+        Gym Domain Analysis Agent Node:
+        Uses actual SmartGym database data (equipment, repair history, similar issues,
+        inventory, supplier, product) to diagnose the facility issue and provide
+        a grounded recommendation.
+        """
         try:
-            prompt = [
-                {
-                    "role": "system",
-                    "content": (
-                        "You are a Senior Gym Facility Technical Analyst. "
-                        "Analyze reported equipment issues, diagnose the root cause, "
-                        "estimate the repair cost in Sri Lankan Rupees (LKR), and recommend action."
-                    )
-                },
-                {
-                    "role": "user",
-                    "content": f"Equipment: {state['equipment_name']}\nIssue: {state['issue_title']}\nDescription: {state['description']}"
-                }
-            ]
+            facility_issue = {
+                "id": state["issue_id"],
+                "issue_id": state["issue_id"],
+                "title": state["issue_title"],
+                "description": state["description"],
+                "equipment_id": state.get("equipment_id"),
+                "equipment_name": state.get("equipment_name", "Gym Equipment"),
+                "severity": state.get("severity", 2)
+            }
+            sanitized = state.get("structured_output", {}).get("safety_validation", {}).get("sanitizedDescription") or state["description"]
 
-            result: DiagnosisOutputSchema = await self.llm_client.generate_structured(
-                prompt,
-                schema=DiagnosisOutputSchema
+            domain_input = DomainAnalysisInput(
+                facility_issue=facility_issue,
+                equipment={"equipment_id": state.get("equipment_id"), "name": state.get("equipment_name")},
+                location=None,
+                sanitized_description=sanitized,
+                maintenance_context={},
+                workflow_id=UUID(state["workflow_id"]) if state.get("workflow_id") else None
+            )
+
+            result, tool_records = await self.domain_agent.analyze_facility_issue(
+                domain_input,
+                step_id=UUID(state["workflow_id"]) if state.get("workflow_id") else None
             )
 
             # Determine if cost exceeds Human-In-The-Loop threshold
@@ -232,10 +246,20 @@ class WorkflowEngine:
             requires_approval = result.estimated_cost >= threshold or state.get("requires_human_approval", False)
 
             structured = dict(state.get("structured_output") or {})
-            structured["diagnosis"] = result.model_dump()
+            structured["domain_analysis"] = result.model_dump(by_alias=True)
+            structured["diagnosis"] = {
+                "diagnosis_summary": result.possible_issue,
+                "recommended_action": result.recommended_action,
+                "estimated_cost": result.estimated_cost,
+                "confidence_score": 0.90,
+                "required_part": result.required_part,
+                "part_available": result.part_available,
+                "recommended_supplier": result.recommended_supplier,
+                "supporting_data_references": result.supporting_data_references
+            }
 
             return {
-                "diagnosis_summary": result.diagnosis_summary,
+                "diagnosis_summary": result.possible_issue,
                 "recommended_action": result.recommended_action,
                 "estimated_cost": result.estimated_cost,
                 "requires_human_approval": requires_approval,
@@ -244,7 +268,7 @@ class WorkflowEngine:
             }
         except Exception as e:
             return {
-                "error_details": f"Diagnosis failed: {str(e)}"
+                "error_details": f"Domain analysis failed: {str(e)}"
             }
 
     async def _approval_gate_node(self, state: WorkflowGraphState) -> dict[str, Any]:
