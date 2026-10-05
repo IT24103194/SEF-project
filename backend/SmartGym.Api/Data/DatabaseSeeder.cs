@@ -197,6 +197,9 @@ public class DatabaseSeeder
         _logger.LogInformation("SmartGym database seeding completed successfully.");
     }
 
+    /// <summary>
+    /// Ensures a Role exists in the database.
+    /// </summary>
     private async Task<Role> EnsureRoleAsync(string name, string description)
     {
         var role = await _context.Roles.FirstOrDefaultAsync(r => r.Name == name);
@@ -214,6 +217,9 @@ public class DatabaseSeeder
         return role;
     }
 
+    /// <summary>
+    /// Ensures a User exists in the database with the specified role.
+    /// </summary>
     private async Task<User> EnsureUserAsync(
         string email,
         string firstName,
@@ -255,6 +261,9 @@ public class DatabaseSeeder
         return user;
     }
 
+    /// <summary>
+    /// Ensures a Member profile exists for a given user.
+    /// </summary>
     private async Task<Member> EnsureMemberProfileAsync(
         Guid userId,
         string emergencyContactName,
@@ -283,6 +292,9 @@ public class DatabaseSeeder
         return member;
     }
 
+    /// <summary>
+    /// Ensures a MembershipPlan exists in the database.
+    /// </summary>
     private async Task<MembershipPlan> EnsureMembershipPlanAsync(
         string name,
         string description,
@@ -311,6 +323,9 @@ public class DatabaseSeeder
         return plan;
     }
 
+    /// <summary>
+    /// Ensures a Membership record exists for a member.
+    /// </summary>
     private async Task EnsureMembershipAsync(Guid memberId, Guid planId, decimal pricePaid, int durationDays)
     {
         var existing = await _context.Memberships.FirstOrDefaultAsync(m => m.MemberId == memberId && m.Status == MembershipStatus.Active);
@@ -333,6 +348,9 @@ public class DatabaseSeeder
         }
     }
 
+    /// <summary>
+    /// Ensures Goal and Progress records exist for a member.
+    /// </summary>
     private async Task EnsureMemberGoalsAndProgressAsync(Guid memberId, Guid trainerId)
     {
         var existingGoal = await _context.Goals.FirstOrDefaultAsync(g => g.MemberId == memberId);
@@ -390,6 +408,9 @@ public class DatabaseSeeder
         }
     }
 
+    /// <summary>
+    /// Ensures a Location exists in the database.
+    /// </summary>
     private async Task<Location> EnsureLocationAsync(string name, string floor, string description)
     {
         var loc = await _context.Locations.FirstOrDefaultAsync(l => l.Name == name);
@@ -408,6 +429,9 @@ public class DatabaseSeeder
         return loc;
     }
 
+    /// <summary>
+    /// Ensures an Equipment record exists in the database.
+    /// </summary>
     private async Task<Equipment> EnsureEquipmentAsync(
         Guid locationId,
         string serialNumber,
@@ -440,6 +464,9 @@ public class DatabaseSeeder
         return eq;
     }
 
+    /// <summary>
+    /// Ensures a FacilityIssue and its related AIWorkflow exist.
+    /// </summary>
     private async Task EnsureFacilityIssueAndAIWorkflowAsync(Guid memberId, Guid equipmentId, Guid locationId)
     {
         var issue = await _context.FacilityIssues.FirstOrDefaultAsync(fi => fi.EquipmentId == equipmentId);
@@ -530,6 +557,9 @@ public class DatabaseSeeder
         }
     }
 
+    /// <summary>
+    /// Ensures a RepairOrder and its associated Approval exist.
+    /// </summary>
     private async Task EnsureRepairOrderAndApprovalAsync(Guid equipmentId, Guid locationId, Guid memberId, Guid adminUserId)
     {
         var existingOrder = await _context.RepairOrders.FirstOrDefaultAsync(ro => ro.EquipmentId == equipmentId);
@@ -601,6 +631,9 @@ public class DatabaseSeeder
         }
     }
 
+    /// <summary>
+    /// Ensures a ClassCategory exists in the database.
+    /// </summary>
     private async Task<ClassCategory> EnsureClassCategoryAsync(string name, string description)
     {
         var cat = await _context.ClassCategories.FirstOrDefaultAsync(c => c.Name == name);
@@ -618,6 +651,9 @@ public class DatabaseSeeder
         return cat;
     }
 
+    /// <summary>
+    /// Ensures a FitnessClass exists in the database.
+    /// </summary>
     private async Task<FitnessClass> EnsureFitnessClassAsync(
         Guid categoryId,
         string name,
@@ -645,6 +681,9 @@ public class DatabaseSeeder
         return fc;
     }
 
+    /// <summary>
+    /// Ensures ClassSchedules and Bookings exist.
+    /// </summary>
     private async Task EnsureSchedulesAndBookingsAsync(
         Guid hiitClassId,
         Guid strengthClassId,
@@ -698,6 +737,9 @@ public class DatabaseSeeder
         }
     }
 
+    /// <summary>
+    /// Ensures a Supplier exists in the database.
+    /// </summary>
     private async Task<Supplier> EnsureSupplierAsync(
         string name,
         string contactPerson,
@@ -724,6 +766,9 @@ public class DatabaseSeeder
         return s;
     }
 
+    /// <summary>
+    /// Ensures a ProductCategory exists in the database.
+    /// </summary>
     private async Task<ProductCategory> EnsureProductCategoryAsync(string name, string description)
     {
         var c = await _context.ProductCategories.FirstOrDefaultAsync(cat => cat.Name == name);
@@ -741,6 +786,9 @@ public class DatabaseSeeder
         return c;
     }
 
+    /// <summary>
+    /// Ensures a Product with associated Inventory and StockMovement records exists.
+    /// </summary>
     private async Task<Product> EnsureProductWithInventoryAsync(
         Guid supplierId,
         Guid categoryId,
