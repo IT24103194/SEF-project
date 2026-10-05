@@ -21,6 +21,8 @@ public class ApprovalItemDto
     public decimal ApprovalThreshold { get; set; }
     public string Decision { get; set; } = "Pending";
     public string? Comments { get; set; }
+    public string? ManagerJustification { get; set; }
+    public decimal? EstimatedBudgetImpact { get; set; }
     public string? ApproverName { get; set; }
     public DateTime? DecidedAt { get; set; }
     public DateTime RequestedAt { get; set; }
@@ -32,6 +34,8 @@ public class ApprovalDecisionRequest
 {
     public string Decision { get; set; } = "Approved"; // "Approved", "Rejected", "RevisionRequired"
     public string? Comments { get; set; }
+    public string? ManagerJustification { get; set; }
+    public decimal? EstimatedBudgetImpact { get; set; }
 }
 
 [ApiController]
@@ -162,6 +166,25 @@ public class ApprovalsController : ControllerBase
         var isApproved = string.Equals(request.Decision, "Approved", StringComparison.OrdinalIgnoreCase);
         var decisionEnum = isApproved ? ApprovalDecision.Approved : ApprovalDecision.Rejected;
 
+        // Business Rule: High-cost repairs (>= 25,000 LKR) require explicit justification for financial auditability
+        if (isApproved && ro.EstimatedCost >= 25000.0m)
+        {
+            var combinedNotes = $"{request.ManagerJustification} {request.Comments}".Trim();
+            if (string.IsNullOrWhiteSpace(combinedNotes) || combinedNotes.Length < 10)
+            {
+                return BadRequest(new ProblemDetails
+                {
+                    Status = StatusCodes.Status400BadRequest,
+                    Title = "Manager Justification Required",
+                    Detail = "Repair orders exceeding the financial threshold of LKR 25,000 require an explicit manager justification note (minimum 10 characters)."
+                });
+            }
+        }
+
+        var finalComments = !string.IsNullOrWhiteSpace(request.ManagerJustification)
+            ? $"[Justification: {request.ManagerJustification}] {request.Comments}".Trim()
+            : request.Comments;
+
         if (approval == null)
         {
             approval = new Approval
@@ -169,7 +192,7 @@ public class ApprovalsController : ControllerBase
                 RepairOrderId = ro.Id,
                 ApproverUserId = approverId,
                 Decision = decisionEnum,
-                Comments = request.Comments,
+                Comments = finalComments,
                 DecidedAt = DateTime.UtcNow,
                 EstimatedCost = ro.EstimatedCost,
                 ApprovalThreshold = 25000.0m
@@ -180,7 +203,7 @@ public class ApprovalsController : ControllerBase
         {
             approval.ApproverUserId = approverId;
             approval.Decision = decisionEnum;
-            approval.Comments = request.Comments;
+            approval.Comments = finalComments;
             approval.DecidedAt = DateTime.UtcNow;
         }
 
@@ -223,6 +246,8 @@ public class ApprovalsController : ControllerBase
             ApprovalThreshold = approval.ApprovalThreshold,
             Decision = approval.Decision.ToString(),
             Comments = approval.Comments,
+            ManagerJustification = request.ManagerJustification,
+            EstimatedBudgetImpact = request.EstimatedBudgetImpact ?? ro.EstimatedCost,
             ApproverName = "Staff Approver",
             DecidedAt = approval.DecidedAt,
             RequestedAt = ro.CreatedAt,
