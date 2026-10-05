@@ -24,6 +24,11 @@ public class FacilityIssuesController : ControllerBase
         _logger = logger;
     }
 
+    /// <summary>
+    /// Helper method to extract the authenticated user's ID and roles from their JWT claims.
+    /// </summary>
+    /// <returns>A tuple containing the User ID as a Guid and a list of assigned roles.</returns>
+    /// <exception cref="UnauthorizedAccessException">Thrown if the user identity is missing or invalid.</exception>
     private (Guid UserId, IList<string> Roles) GetCurrentUserContext()
     {
         var userIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
