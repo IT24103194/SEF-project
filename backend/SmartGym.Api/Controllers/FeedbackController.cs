@@ -48,6 +48,30 @@ public class FeedbackController : ControllerBase
     }
 
     /// <summary>
+    /// Retrieve feedback summary metrics and sentiment distribution (Staff/Admin).
+    /// </summary>
+    [HttpGet("summary")]
+    [Authorize(Policy = AppPolicies.RequireStaff)]
+    [ProducesResponseType(typeof(FeedbackSummaryMetricsDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetFeedbackSummary(CancellationToken cancellationToken)
+    {
+        var (userId, roles) = GetCurrentUserContext();
+        var all = await _facilityService.GetFeedbacksAsync(new PagedRequest { PageNumber = 1, PageSize = 1000 }, userId, roles, cancellationToken);
+        var items = all.Items.ToList();
+        var totalCount = items.Count;
+        var summary = new FeedbackSummaryMetricsDto
+        {
+            TotalFeedbackCount = totalCount,
+            AverageRating = totalCount > 0 ? Math.Round(items.Average(x => (double)x.Rating), 2) : 0,
+            PositiveCount = items.Count(x => x.Rating >= 4),
+            NeutralCount = items.Count(x => x.Rating == 3),
+            NeedsAttentionCount = items.Count(x => x.Rating <= 2),
+            RatingDistribution = Enumerable.Range(1, 5).ToDictionary(r => r, r => items.Count(x => x.Rating == r))
+        };
+        return Ok(summary);
+    }
+
+    /// <summary>
     /// Retrieve feedback details by ID.
     /// </summary>
     [HttpGet("{id:guid}")]

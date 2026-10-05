@@ -456,11 +456,27 @@ public class FeedbackDto
     public string Subject { get; set; } = string.Empty;
     public string Content { get; set; } = string.Empty;
     public int Rating { get; set; }
+    public string Sentiment => Rating switch
+    {
+        >= 4 => "Positive",
+        3 => "Neutral",
+        _ => "NeedsAttention"
+    };
     public FeedbackStatus Status { get; set; }
     public string StatusName => Status.ToString();
     public string? AdminResponse { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }
+}
+
+public class FeedbackSummaryMetricsDto
+{
+    public int TotalFeedbackCount { get; set; }
+    public double AverageRating { get; set; }
+    public int PositiveCount { get; set; }
+    public int NeutralCount { get; set; }
+    public int NeedsAttentionCount { get; set; }
+    public Dictionary<int, int> RatingDistribution { get; set; } = new();
 }
 
 public class CreateFeedbackRequest
