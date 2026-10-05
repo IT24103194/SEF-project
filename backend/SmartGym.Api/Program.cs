@@ -242,6 +242,7 @@ app.MapControllers();
 app.MapGet("/", () => Results.Redirect("/swagger"));
 
 // 8. Database Seeding in Development and Testing
+// Note: We enable seeding in the 'Testing' environment so that integration tests have access to the required seed data.
 if (app.Environment.IsDevelopment() || app.Environment.EnvironmentName.Equals("Testing", StringComparison.OrdinalIgnoreCase))
 {
     using var scope = app.Services.CreateScope();
