@@ -1472,6 +1472,13 @@ public class FacilityService : IFacilityService
 
     private static FacilityIssueDto MapToIssueDto(FacilityIssue i)
     {
+        var urgency = i.Severity == IssueSeverity.Critical 
+            ? IssueUrgencyLevel.CriticalEmergency 
+            : (i.Severity == IssueSeverity.High ? IssueUrgencyLevel.Elevated : IssueUrgencyLevel.Normal);
+
+        var sla = SmartGym.Api.Validators.FacilityIssueValidator.GetTargetResolutionSla(i.Severity, urgency);
+        var targetResolution = i.ReportedAt.Add(sla);
+
         return new FacilityIssueDto
         {
             Id = i.Id,
@@ -1482,8 +1489,8 @@ public class FacilityService : IFacilityService
             EquipmentName = i.Equipment?.Name,
             EquipmentSerialNumber = i.Equipment?.SerialNumber,
             LocationId = i.LocationId,
-            LocationName = i.Location.Name,
-            LocationFloor = i.Location.Floor,
+            LocationName = i.Location?.Name ?? string.Empty,
+            LocationFloor = i.Location?.Floor ?? string.Empty,
             Title = i.Title,
             Description = i.Description,
             SanitizedDescription = i.SanitizedDescription,
@@ -1491,6 +1498,8 @@ public class FacilityService : IFacilityService
             ModerationStatus = i.ModerationStatus,
             ModerationReason = i.ModerationReason,
             Severity = i.Severity,
+            Urgency = urgency,
+            TargetResolutionTime = targetResolution,
             Status = i.Status,
             ReportedAt = i.ReportedAt,
             ResolvedAt = i.ResolvedAt,
