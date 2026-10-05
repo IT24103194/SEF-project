@@ -33,6 +33,8 @@ public interface IFacilityService
     Task<FacilityIssueDto> CreateFacilityIssueAsync(CreateFacilityIssueRequest request, Guid currentUserId, IFormFile? imageFile, CancellationToken cancellationToken = default);
     Task<FacilityIssueDto> UpdateFacilityIssueAsync(Guid id, UpdateFacilityIssueRequest request, Guid currentUserId, IList<string> roles, CancellationToken cancellationToken = default);
     Task<FacilityIssueDto> TransitionIssueStatusAsync(Guid id, IssueStatusTransitionRequest request, Guid currentUserId, IList<string> roles, CancellationToken cancellationToken = default);
+    Task<FacilityIssueDto> EscalateIssueAsync(Guid id, EscalateIssueRequest request, Guid currentUserId, IList<string> roles, CancellationToken cancellationToken = default);
+    Task<int> BatchUpdateStatusAsync(BatchUpdateIssueStatusRequest request, Guid currentUserId, IList<string> roles, CancellationToken cancellationToken = default);
     Task<IssueImageDto> UploadIssueImageAsync(Guid id, IFormFile file, Guid currentUserId, IList<string> roles, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<IssueHistoryDto>> GetIssueHistoryAsync(Guid id, Guid currentUserId, IList<string> roles, CancellationToken cancellationToken = default);
 
@@ -833,6 +835,112 @@ public class FacilityService : IFacilityService
             id, fromStatus, toStatus, currentUserId);
 
         return await GetFacilityIssueByIdAsync(id, currentUserId, roles, cancellationToken);
+    }
+
+    public async Task<FacilityIssueDto> EscalateIssueAsync(
+        Guid id, 
+        EscalateIssueRequest request, 
+        Guid currentUserId, 
+        IList<string> roles, 
+        CancellationToken cancellationToken = default)
+    {
+        var issue = await _dbContext.FacilityIssues
+            .Include(i => i.Location)
+            .Include(i => i.Equipment)
+            .Include(i => i.ReportedBy).ThenInclude(m => m.User)
+            .Include(i => i.Images)
+            .Include(i => i.RepairOrders)
+            .FirstOrDefaultAsync(i => i.Id == id, cancellationToken);
+
+        if (issue == null)
+        {
+            throw new KeyNotFoundException($"Facility issue with ID '{id}' was not found.");
+        }
+
+        if (request.Urgency == IssueUrgencyLevel.CriticalEmergency)
+        {
+            issue.Severity = IssueSeverity.Critical;
+        }
+        else if (request.Urgency == IssueUrgencyLevel.Elevated && issue.Severity == IssueSeverity.Low)
+        {
+            issue.Severity = IssueSeverity.Medium;
+        }
+
+        issue.UpdatedAt = DateTime.UtcNow;
+
+        var audit = new AuditLog
+        {
+            Id = Guid.NewGuid(),
+            EntityName = "FacilityIssue",
+            EntityId = issue.Id.ToString(),
+            Action = "ESCALATE",
+            UserId = currentUserId,
+            NewValuesJson = JsonSerializer.Serialize(new
+            {
+                urgency = request.Urgency.ToString(),
+                reason = request.Reason,
+                contact = request.EscalationContact,
+                updatedSeverity = issue.Severity.ToString()
+            }),
+            Timestamp = DateTime.UtcNow
+        };
+        await _dbContext.AuditLogs.AddAsync(audit, cancellationToken);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        _logger.LogInformation("Facility issue {IssueId} escalated to {Urgency} by user {UserId}. Reason: {Reason}",
+            id, request.Urgency, currentUserId, request.Reason);
+
+        return MapToIssueDto(issue);
+    }
+
+    public async Task<int> BatchUpdateStatusAsync(
+        BatchUpdateIssueStatusRequest request, 
+        Guid currentUserId, 
+        IList<string> roles, 
+        CancellationToken cancellationToken = default)
+    {
+        if (request.IssueIds == null || request.IssueIds.Count == 0)
+        {
+            return 0;
+        }
+
+        var issues = await _dbContext.FacilityIssues
+            .Where(i => request.IssueIds.Contains(i.Id))
+            .ToListAsync(cancellationToken);
+
+        foreach (var issue in issues)
+        {
+            issue.Status = request.NewStatus;
+            issue.UpdatedAt = DateTime.UtcNow;
+            if (request.NewStatus == FacilityIssueStatus.RESOLVED && !string.IsNullOrWhiteSpace(request.Note))
+            {
+                issue.ResolutionNotes = request.Note;
+                issue.ResolvedAt = DateTime.UtcNow;
+            }
+        }
+
+        var audit = new AuditLog
+        {
+            Id = Guid.NewGuid(),
+            EntityName = "FacilityIssue",
+            EntityId = "BATCH",
+            Action = "BATCH_STATUS_UPDATE",
+            UserId = currentUserId,
+            NewValuesJson = JsonSerializer.Serialize(new
+            {
+                status = request.NewStatus.ToString(),
+                count = issues.Count,
+                note = request.Note
+            }),
+            Timestamp = DateTime.UtcNow
+        };
+        await _dbContext.AuditLogs.AddAsync(audit, cancellationToken);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        _logger.LogInformation("Batch updated {Count} issues to status {Status} by user {UserId}",
+            issues.Count, request.NewStatus, currentUserId);
+
+        return issues.Count;
     }
 
     public async Task<IssueImageDto> UploadIssueImageAsync(

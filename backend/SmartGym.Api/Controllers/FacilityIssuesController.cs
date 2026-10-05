@@ -152,6 +152,38 @@ public class FacilityIssuesController : ControllerBase
     }
 
     /// <summary>
+    /// Escalate an existing facility issue with emergency urgency.
+    /// </summary>
+    [HttpPost("{id:guid}/escalate")]
+    [Authorize]
+    [ProducesResponseType(typeof(FacilityIssueDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> EscalateIssue(
+        Guid id,
+        [FromBody] EscalateIssueRequest request,
+        CancellationToken cancellationToken)
+    {
+        var (userId, roles) = GetCurrentUserContext();
+        var result = await _facilityService.EscalateIssueAsync(id, request, userId, roles, cancellationToken);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Batch update status across multiple facility issues (Admin/Manager).
+    /// </summary>
+    [HttpPost("batch-status")]
+    [Authorize(Roles = "Admin,Manager")]
+    [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
+    public async Task<IActionResult> BatchUpdateStatus(
+        [FromBody] BatchUpdateIssueStatusRequest request,
+        CancellationToken cancellationToken)
+    {
+        var (userId, roles) = GetCurrentUserContext();
+        var updatedCount = await _facilityService.BatchUpdateStatusAsync(request, userId, roles, cancellationToken);
+        return Ok(new { success = true, updatedCount });
+    }
+
+    /// <summary>
     /// Upload and attach an image to an existing facility issue.
     /// </summary>
     [HttpPost("{id:guid}/images")]
