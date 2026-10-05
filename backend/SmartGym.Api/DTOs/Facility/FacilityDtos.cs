@@ -198,7 +198,7 @@ public class IssueImageDto
     public DateTime UploadedAt { get; set; }
 }
 
-public class CreateFacilityIssueRequest
+public class CreateFacilityIssueRequest : IValidatableObject
 {
     [Required]
     public Guid LocationId { get; set; }
@@ -219,9 +219,26 @@ public class CreateFacilityIssueRequest
 
     [MaxLength(100)]
     public string? EmergencyEscalationContact { get; set; }
+
+    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+    {
+        if (Severity == IssueSeverity.Critical && Urgency == IssueUrgencyLevel.Normal)
+        {
+            yield return new ValidationResult(
+                "Critical severity issues cannot have Normal urgency. Please escalate to Elevated or CriticalEmergency.",
+                new[] { nameof(Urgency) });
+        }
+
+        if (Urgency == IssueUrgencyLevel.CriticalEmergency && string.IsNullOrWhiteSpace(EmergencyEscalationContact))
+        {
+            yield return new ValidationResult(
+                "Emergency escalation contact is required when reporting a CriticalEmergency issue.",
+                new[] { nameof(EmergencyEscalationContact) });
+        }
+    }
 }
 
-public class UpdateFacilityIssueRequest
+public class UpdateFacilityIssueRequest : IValidatableObject
 {
     [Required]
     public Guid LocationId { get; set; }
@@ -242,6 +259,16 @@ public class UpdateFacilityIssueRequest
 
     [MaxLength(100)]
     public string? EmergencyEscalationContact { get; set; }
+
+    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+    {
+        if (Severity == IssueSeverity.Critical && Urgency == IssueUrgencyLevel.Normal)
+        {
+            yield return new ValidationResult(
+                "Critical severity issues cannot have Normal urgency. Please escalate to Elevated or CriticalEmergency.",
+                new[] { nameof(Urgency) });
+        }
+    }
 }
 
 public class EscalateIssueRequest
