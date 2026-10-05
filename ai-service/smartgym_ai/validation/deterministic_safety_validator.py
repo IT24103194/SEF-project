@@ -170,6 +170,18 @@ class DeterministicSafetyValidator:
                         f"Unsupported operation rejected: Agent '{step.get('assigned_agent')}' cannot execute high-impact action '{step.get('step_name')}'."
                     )
 
+        # --- 10. Physical Hazard & Life-Safety Rule ---
+        HAZARD_PATTERNS = [
+            "snapped cable", "frayed wire", "exposed electrical", "live wire",
+            "weight stack falling", "pulley snapped", "loose pin", "smoke emitting", "fire hazard"
+        ]
+        combined_text = f"{raw_title} {raw_description}".lower()
+        if any(hazard in combined_text for hazard in HAZARD_PATTERNS):
+            approval_required = True
+            ai_logger.warning(
+                f"Life-safety physical hazard keyword detected in issue '{ticket_id}'"
+            )
+
         # --- Synthesis & Summary ---
         if issues:
             summary = f"Validation failed with {len(issues)} issue(s): " + "; ".join(issues)
