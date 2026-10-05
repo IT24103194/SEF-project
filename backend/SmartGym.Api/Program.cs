@@ -241,8 +241,8 @@ app.MapControllers();
 // Root redirect to Swagger UI
 app.MapGet("/", () => Results.Redirect("/swagger"));
 
-// 8. Database Seeding in Development
-if (app.Environment.IsDevelopment() && !app.Environment.EnvironmentName.Equals("Testing", StringComparison.OrdinalIgnoreCase))
+// 8. Database Seeding in Development and Testing
+if (app.Environment.IsDevelopment() || app.Environment.EnvironmentName.Equals("Testing", StringComparison.OrdinalIgnoreCase))
 {
     using var scope = app.Services.CreateScope();
     var seeder = scope.ServiceProvider.GetRequiredService<DatabaseSeeder>();
