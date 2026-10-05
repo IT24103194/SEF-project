@@ -125,6 +125,13 @@ public class EquipmentHistoryDto
 #endregion
 
 #region Facility Issue DTOs
+public enum IssueUrgencyLevel
+{
+    Normal = 0,
+    Elevated = 1,
+    CriticalEmergency = 2
+}
+
 public class FacilityIssueDto
 {
     public Guid Id { get; set; }
@@ -148,6 +155,11 @@ public class FacilityIssueDto
     public string? ModerationReason { get; set; }
     public IssueSeverity Severity { get; set; }
     public string SeverityName => Severity.ToString();
+    public IssueUrgencyLevel Urgency { get; set; } = IssueUrgencyLevel.Normal;
+    public string UrgencyName => Urgency.ToString();
+    public string? EmergencyEscalationContact { get; set; }
+    public DateTime? TargetResolutionTime { get; set; }
+    public bool IsOverdue => Status != FacilityIssueStatus.Resolved && TargetResolutionTime.HasValue && DateTime.UtcNow > TargetResolutionTime.Value;
     public FacilityIssueStatus Status { get; set; }
     public string StatusName => Status.ToString();
     public DateTime ReportedAt { get; set; }
@@ -164,6 +176,10 @@ public class FacilityIssueSummaryDto
     public Guid Id { get; set; }
     public string Title { get; set; } = string.Empty;
     public IssueSeverity Severity { get; set; }
+    public IssueUrgencyLevel Urgency { get; set; } = IssueUrgencyLevel.Normal;
+    public string UrgencyName => Urgency.ToString();
+    public DateTime? TargetResolutionTime { get; set; }
+    public bool IsOverdue => Status != FacilityIssueStatus.Resolved && TargetResolutionTime.HasValue && DateTime.UtcNow > TargetResolutionTime.Value;
     public FacilityIssueStatus Status { get; set; }
     public DateTime ReportedAt { get; set; }
     public DateTime? ResolvedAt { get; set; }
@@ -198,6 +214,11 @@ public class CreateFacilityIssueRequest
     public string Description { get; set; } = string.Empty;
 
     public IssueSeverity Severity { get; set; } = IssueSeverity.Medium;
+
+    public IssueUrgencyLevel Urgency { get; set; } = IssueUrgencyLevel.Normal;
+
+    [MaxLength(100)]
+    public string? EmergencyEscalationContact { get; set; }
 }
 
 public class UpdateFacilityIssueRequest
@@ -216,6 +237,35 @@ public class UpdateFacilityIssueRequest
     public string Description { get; set; } = string.Empty;
 
     public IssueSeverity Severity { get; set; } = IssueSeverity.Medium;
+
+    public IssueUrgencyLevel Urgency { get; set; } = IssueUrgencyLevel.Normal;
+
+    [MaxLength(100)]
+    public string? EmergencyEscalationContact { get; set; }
+}
+
+public class EscalateIssueRequest
+{
+    [Required]
+    [MaxLength(500)]
+    public string Reason { get; set; } = string.Empty;
+
+    public IssueUrgencyLevel Urgency { get; set; } = IssueUrgencyLevel.CriticalEmergency;
+
+    [MaxLength(100)]
+    public string? EscalationContact { get; set; }
+}
+
+public class BatchUpdateIssueStatusRequest
+{
+    [Required]
+    public List<Guid> IssueIds { get; set; } = new();
+
+    [Required]
+    public FacilityIssueStatus NewStatus { get; set; }
+
+    [MaxLength(500)]
+    public string? Note { get; set; }
 }
 
 public class IssueStatusTransitionRequest
