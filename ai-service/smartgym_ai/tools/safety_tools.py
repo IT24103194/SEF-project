@@ -25,6 +25,15 @@ PROMPT_INJECTION_PATTERNS: list[re.Pattern] = [
     re.compile(r"delete\s+from\s+[a-z0-9_]+", re.IGNORECASE),
     re.compile(r"rm\s+-rf", re.IGNORECASE),
     re.compile(r"<script.*?>", re.IGNORECASE),
+    # Advanced / Leetspeak / Adversarial injection patterns
+    re.compile(r"1gn[o0]r[e3]\s+.*(?:instructions|rules|prompts)", re.IGNORECASE),
+    re.compile(r"byp[@a]ss\s+.*(?:safety|guard|gate)", re.IGNORECASE),
+    re.compile(r"```\s*(?:system|assistant|system_prompt)", re.IGNORECASE),
+    re.compile(r"<\s*\|?\s*im_start\s*\|?\s*>", re.IGNORECASE),
+    re.compile(r"\[\s*INST\s*\]", re.IGNORECASE),
+    re.compile(r"(?:you\s+are\s+now|act\s+as)\s+(?:DAN|jailbreak|unrestricted|evil)", re.IGNORECASE),
+    re.compile(r"override\s+(?:all\s+)?(?:security|financial|approval)\s+(?:policies|limits|gates)", re.IGNORECASE),
+    re.compile(r"pretend\s+(?:you\s+have\s+no|there\s+are\s+no)\s+(?:rules|guidelines|restrictions)", re.IGNORECASE),
 ]
 
 
@@ -77,13 +86,15 @@ class ModerateTextTool(ToolBase):
                     return val[0] + ("*" * (length - 1))
                 sanitized = re.sub(pattern, _mask, sanitized, flags=re.IGNORECASE)
 
-        # 2. Detect prompt injection
+        # 2. Detect prompt injection (raw text and normalized leetspeak)
         injection_detected = False
         injection_reasons = []
+        normalized_text = text.replace("@", "a").replace("0", "o").replace("1", "i").replace("3", "e").replace("$", "s")
         for p in PROMPT_INJECTION_PATTERNS:
-            if p.search(text):
+            if p.search(text) or p.search(normalized_text):
                 injection_detected = True
                 injection_reasons.append("Adversarial instruction / prompt injection pattern detected")
+                break
 
         is_safe = (len(detected_words) == 0) and not injection_detected
         reasons = []
