@@ -21,6 +21,7 @@ export const ApprovalsPage = () => {
   const [selectedApproval, setSelectedApproval] = useState(null);
   const [decisionType, setDecisionType] = useState('Approved');
   const [comments, setComments] = useState('');
+  const [managerJustification, setManagerJustification] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const fetchApprovals = async () => {
@@ -51,26 +52,41 @@ export const ApprovalsPage = () => {
     setSelectedApproval(item);
     setDecisionType(type);
     setComments('');
+    setManagerJustification('');
   };
 
   const handleSubmitDecision = async (e) => {
     e.preventDefault();
     if (!selectedApproval) return;
+
+    if (decisionType === 'Approved' && (selectedApproval.estimatedCost >= 25000 || selectedApproval.estimatedCost >= 250)) {
+      if (!managerJustification.trim() || managerJustification.trim().length < 10) {
+        setError('High-value expenditures require an explicit manager audit justification note (at least 10 characters).');
+        return;
+      }
+    }
+
     setIsSubmitting(true);
     setError(null);
     try {
       if (selectedApproval.aiWorkflowId) {
+        const payloadComment = managerJustification.trim() 
+          ? `[Justification: ${managerJustification.trim()}] ${comments.trim()}`.trim()
+          : comments.trim();
+
         if (decisionType === 'Approved') {
-          await aiWorkflowsApi.approveWorkflow(selectedApproval.aiWorkflowId, comments.trim());
+          await aiWorkflowsApi.approveWorkflow(selectedApproval.aiWorkflowId, payloadComment);
         } else if (decisionType === 'Rejected') {
-          await aiWorkflowsApi.rejectWorkflow(selectedApproval.aiWorkflowId, comments.trim());
+          await aiWorkflowsApi.rejectWorkflow(selectedApproval.aiWorkflowId, payloadComment);
         } else {
-          await aiWorkflowsApi.reviseWorkflow(selectedApproval.aiWorkflowId, comments.trim());
+          await aiWorkflowsApi.reviseWorkflow(selectedApproval.aiWorkflowId, payloadComment);
         }
       } else {
         await approvalsApi.submitDecision(selectedApproval.id, {
           decision: decisionType === 'RevisionRequired' ? 'RevisionRequired' : decisionType,
           comments: comments.trim() || undefined,
+          managerJustification: managerJustification.trim() || undefined,
+          estimatedBudgetImpact: selectedApproval.estimatedCost,
         });
       }
       setSelectedApproval(null);
@@ -270,12 +286,48 @@ export const ApprovalsPage = () => {
                 You are about to {decisionType === 'RevisionRequired' ? 'request a revision for' : decisionType.toLowerCase()} the repair order for <strong style={{ color: '#ffffff' }}>{selectedApproval.equipmentName}</strong> estimated at <strong style={{ color: 'var(--accent-emerald)' }}>${selectedApproval.estimatedCost?.toFixed(2)}</strong>.
               </div>
 
+              {(selectedApproval.estimatedCost >= 25000 || selectedApproval.estimatedCost >= 250) && (
+                <div style={{
+                  backgroundColor: 'rgba(245, 158, 11, 0.15)',
+                  border: '1px solid rgba(245, 158, 11, 0.3)',
+                  padding: '0.75rem',
+                  borderRadius: '6px',
+                  marginBottom: '1rem',
+                  fontSize: '0.8rem',
+                  color: 'var(--accent-amber)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}>
+                  <AlertCircle size={16} />
+                  <span>
+                    <strong>High-Value Authorization:</strong> Expenditures of this scale require mandatory manager audit justification.
+                  </span>
+                </div>
+              )}
+
+              {decisionType === 'Approved' && (selectedApproval.estimatedCost >= 25000 || selectedApproval.estimatedCost >= 250) && (
+                <div className="form-group" style={{ marginBottom: '1rem' }}>
+                  <label className="form-label" style={{ color: 'var(--accent-amber)', fontWeight: 600 }}>
+                    Mandatory Manager Audit Justification *
+                  </label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="e.g. Approved replacement of OEM motor bearings under maintenance SLA..."
+                    value={managerJustification}
+                    onChange={(e) => setManagerJustification(e.target.value)}
+                    required
+                  />
+                </div>
+              )}
+
               <div className="form-group">
-                <label className="form-label">Review / Justification Comments</label>
+                <label className="form-label">Review / Additional Comments</label>
                 <textarea
                   className="form-textarea"
                   rows={3}
-                  placeholder={decisionType === 'RevisionRequired' ? 'Explain what changes or additional data are required...' : 'Enter notes or audit justification...'}
+                  placeholder={decisionType === 'RevisionRequired' ? 'Explain what changes or additional data are required...' : 'Enter notes or review comments...'}
                   value={comments}
                   onChange={(e) => setComments(e.target.value)}
                 />
