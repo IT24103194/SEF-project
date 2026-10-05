@@ -93,8 +93,10 @@ I hereby certify that this report and the software contributions documented here
 ---
 
 ## Student 2: Component 2 Owner & AI Safety Specialist
-- **Role**: Backend & Frontend Engineer, AI Safety Specialist
-- **Assigned Component**: **Component 2: Feedback & Facility Resolution**
+- **Student Name**: Pulitha (Component 2 Lead)
+- **Student Registration ID**: `IT24103362`
+- **Email**: `IT24103362@my.sliit.lk`
+- **Branch**: `IT24103362`
 
 ### 1. Contribution Overview
 Responsible for the full-stack implementation of the member feedback and facility issue reporting system, along with the **Safety & Content Validation Agent** and the **Human-in-the-Loop Approval Queue**.
@@ -105,7 +107,7 @@ Responsible for the full-stack implementation of the member feedback and facilit
 
 ### 3. Backend Implementation (ASP.NET Core 8)
 - Authored `FacilityIssuesController.cs`, `FeedbackController.cs`, `ApprovalsController.cs`.
-- Implemented `FacilityIssueService.cs` handling multipart image uploads, status transitions, and AI workflow invocation.
+- Implemented `FacilityIssueService.cs` handling multipart image uploads, status transitions, SLA calculations, and AI workflow invocation.
 - Developed `ApprovalService.cs` enforcing Human-in-the-Loop decision logic and RBAC manager authorization.
 
 ### 4. Database Implementation (PostgreSQL 16 & EF Core)
@@ -136,7 +138,8 @@ Responsible for the full-stack implementation of the member feedback and facilit
 - AI: Authored `test_safety_agent.py`, `test_safe_failure.py`, and Golden Cases 2, 3, 4, 5.
 
 ### 9. Git & Version Control Evidence
-- Commits covering Phase 11 (Facility reporting), Phase 13 (Safety validation agent), and Phase 15 (Human approval control).
+- **Branch**: `IT24103362`
+- **Component Commits**: Iterative commits covering Facility reporting, SLA calculation, Safety validation agent, and HITL approvals.
 
 ### 10. Challenges & Learning
 - *Challenge*: Preventing approval bypass attempts where unapproved tools might execute.
@@ -145,7 +148,8 @@ Responsible for the full-stack implementation of the member feedback and facilit
 ### 11. Student Declaration
 I certify that the contributions described above represent my individual work in collaboration with the SmartGym project team.
 
-**Date**: October 1, 2026  
+**Signature**: *IT24103362 (Pulitha)*  
+**Date**: October 6, 2026  
 
 ---
 

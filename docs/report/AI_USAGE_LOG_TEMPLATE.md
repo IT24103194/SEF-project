@@ -52,3 +52,18 @@ According to university academic integrity guidelines, any use of Generative AI 
 - **Rejected Output**: Rejected suggestion to use an in-memory dictionary without database persistence for approvals.
 - **Verification Method**: Executed `pytest tests/ai/test_complete_workflow.py` (Golden Case 3 & 4).
 - **Commit Reference**: `Commit c68b39a`
+
+### Entry 3: Facility Issue Emergency Escalation and Safety Validation
+- **Log ID**: `AI-LOG-20261005-001`
+- **Date & Time**: `2026-10-05T19:30:00Z`
+- **Student ID**: `IT24103362`
+- **AI Tool**: `Google Antigravity IDE`
+- **Model**: `gemini-3.8-flash`
+- **Target Component**: `backend / SmartGym.Api / DTOs / Facility & SafetyValidator`
+- **Prompt**: "Design urgency level contracts, SLA tracking logic, and prompt injection leetspeak detection rules for facility issues."
+- **Generated Output Summary**: Provided DTO schema additions and regex patterns for obfuscated injection detection.
+- **Manual Changes Made**: Tuned SLA thresholds to reflect gym maintenance contracts (4h for Critical, 12h for High) and added regex bounds to prevent false positives.
+- **Rejected Output**: Rejected loose regex that flagged common fitness terms like 'press' or 'drop'.
+- **Verification Method**: Verified via `dotnet build backend/SmartGym.Api` and unit test assertions.
+- **Commit Reference**: `IT24103362 branch commit series`
+
