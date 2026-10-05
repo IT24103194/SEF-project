@@ -37,6 +37,7 @@ export const FacilityResolutionPage = ({ defaultTab = 'issues' }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [issueStatusFilter, setIssueStatusFilter] = useState('');
   const [issueSeverityFilter, setIssueSeverityFilter] = useState('');
+  const [issueUrgencyFilter, setIssueUrgencyFilter] = useState('');
   const [locationFilter, setLocationFilter] = useState('');
 
   useEffect(() => {
@@ -121,6 +122,7 @@ export const FacilityResolutionPage = ({ defaultTab = 'issues' }) => {
   const filteredIssues = issues.filter((i) => {
     if (issueStatusFilter && (i.statusName !== issueStatusFilter && i.status !== issueStatusFilter)) return false;
     if (issueSeverityFilter && (i.severityName !== issueSeverityFilter && i.severity !== issueSeverityFilter)) return false;
+    if (issueUrgencyFilter && (i.urgencyName !== issueUrgencyFilter && String(i.urgency) !== issueUrgencyFilter)) return false;
     if (locationFilter && i.locationId !== locationFilter) return false;
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
@@ -258,6 +260,20 @@ export const FacilityResolutionPage = ({ defaultTab = 'issues' }) => {
             </select>
 
             <select
+              value={issueUrgencyFilter}
+              onChange={(e) => setIssueUrgencyFilter(e.target.value)}
+              style={{
+                padding: '0.6rem 0.85rem', borderRadius: '8px',
+                backgroundColor: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', color: 'white'
+              }}
+            >
+              <option value="">All Urgencies</option>
+              <option value="Normal">Normal</option>
+              <option value="Elevated">Elevated</option>
+              <option value="CriticalEmergency">Critical Emergency</option>
+            </select>
+
+            <select
               value={locationFilter}
               onChange={(e) => setLocationFilter(e.target.value)}
               style={{
@@ -278,7 +294,7 @@ export const FacilityResolutionPage = ({ defaultTab = 'issues' }) => {
               <thead>
                 <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.08)', backgroundColor: 'rgba(255,255,255,0.02)' }}>
                   <th style={{ padding: '1rem', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>STATUS</th>
-                  <th style={{ padding: '1rem', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>SEVERITY</th>
+                  <th style={{ padding: '1rem', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>SEVERITY / SLA</th>
                   <th style={{ padding: '1rem', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>ISSUE TITLE</th>
                   <th style={{ padding: '1rem', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>EQUIPMENT / ZONE</th>
                   <th style={{ padding: '1rem', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>REPORTED BY</th>
@@ -305,12 +321,32 @@ export const FacilityResolutionPage = ({ defaultTab = 'issues' }) => {
                         </span>
                       </td>
                       <td style={{ padding: '1rem' }}>
-                        <span style={{
-                          color: iss.severityName === 'Critical' ? '#EF4444' : iss.severityName === 'High' ? '#F97316' : '#94A3B8',
-                          fontWeight: 600, fontSize: '0.85rem'
-                        }}>
-                          {iss.severityName || iss.severity}
-                        </span>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                          <span style={{
+                            color: iss.severityName === 'Critical' ? '#EF4444' : iss.severityName === 'High' ? '#F97316' : '#94A3B8',
+                            fontWeight: 600, fontSize: '0.85rem'
+                          }}>
+                            {iss.severityName || iss.severity}
+                          </span>
+                          {iss.urgencyName === 'CriticalEmergency' && (
+                            <span style={{
+                              backgroundColor: 'rgba(239, 68, 68, 0.2)', color: '#EF4444',
+                              padding: '2px 6px', borderRadius: '4px', fontSize: '0.68rem', fontWeight: 700,
+                              display: 'inline-flex', alignItems: 'center', width: 'fit-content', border: '1px solid rgba(239,68,68,0.4)'
+                            }}>
+                              🚨 EMERGENCY
+                            </span>
+                          )}
+                          {iss.isOverdue && (
+                            <span style={{
+                              backgroundColor: 'rgba(245, 158, 11, 0.2)', color: '#F59E0B',
+                              padding: '2px 6px', borderRadius: '4px', fontSize: '0.68rem', fontWeight: 600,
+                              display: 'inline-flex', alignItems: 'center', width: 'fit-content'
+                            }}>
+                              ⚠️ OVERDUE
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td style={{ padding: '1rem' }}>
                         <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{iss.title}</div>
