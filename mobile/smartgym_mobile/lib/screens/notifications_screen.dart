@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/notification_model.dart';
 import '../providers/notification_provider.dart';
+import '../widgets/animated_gym_background.dart';
 
 class NotificationsScreen extends ConsumerStatefulWidget {
   const NotificationsScreen({super.key});
@@ -24,10 +25,9 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     final state = ref.watch(notificationProvider);
     final notifier = ref.read(notificationProvider.notifier);
 
-    return Scaffold(
-      backgroundColor: const Color(0xFF0B0F19),
+    return AnimatedGymBackground(
       appBar: AppBar(
-        backgroundColor: const Color(0xFF111827),
+        backgroundColor: const Color(0xFF111827).withValues(alpha: 0.85),
         elevation: 0,
         title: Row(
           children: [
@@ -76,7 +76,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
           ),
         ],
       ),
-      body: RefreshIndicator(
+      child: RefreshIndicator(
         color: const Color(0xFF6366F1),
         backgroundColor: const Color(0xFF1E293B),
         onRefresh: () => notifier.loadNotifications(),

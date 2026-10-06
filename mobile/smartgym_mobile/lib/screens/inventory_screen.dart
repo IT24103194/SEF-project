@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/inventory_models.dart';
 import '../services/inventory_api_service.dart';
 import 'stock_history_screen.dart';
+import '../widgets/animated_gym_background.dart';
 
 class InventoryScreen extends StatefulWidget {
   final InventoryApiService? apiService;
@@ -148,10 +149,9 @@ class _InventoryScreenState extends State<InventoryScreen> {
     final lowStockCount = _items.where((i) => i.isLowStock).length;
     final totalUnits = _items.fold<int>(0, (sum, i) => sum + i.quantityInStock);
 
-    return Scaffold(
-      backgroundColor: const Color(0xFF0B0F19),
+    return AnimatedGymBackground(
       appBar: AppBar(
-        backgroundColor: const Color(0xFF111827),
+        backgroundColor: const Color(0xFF111827).withValues(alpha: 0.85),
         elevation: 0,
         title: const Text(
           'Supplement Inventory',
@@ -164,7 +164,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
           ),
         ],
       ),
-      body: Column(
+      child: Column(
         children: [
           // KPI Metric Header
           Container(

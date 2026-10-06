@@ -147,6 +147,10 @@ describe('MembershipsPage Component', () => {
     expect(screen.getByText('Member Directory')).toBeTruthy();
     expect(screen.getByText('Fitness Goals & Progress')).toBeTruthy();
     expect(screen.getByText('Analytics & Reports')).toBeTruthy();
+
+    await waitFor(() => {
+      expect(membershipApi.getPlans).toHaveBeenCalled();
+    });
   });
 
   it('loads and displays membership plans on the plans tab', async () => {

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/feedback_model.dart';
 import '../services/feedback_api_service.dart';
 import '../widgets/app_button.dart';
+import '../widgets/animated_gym_background.dart';
 
 final feedbacksListProvider = FutureProvider.autoDispose<List<FeedbackModel>>((ref) async {
   final api = ref.watch(feedbackApiServiceProvider);
@@ -89,17 +90,16 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
   Widget build(BuildContext context) {
     final feedbacksAsync = ref.watch(feedbacksListProvider);
 
-    return Scaffold(
-      backgroundColor: const Color(0xFF0B0F19),
+    return AnimatedGymBackground(
       appBar: AppBar(
-        backgroundColor: const Color(0xFF111827),
+        backgroundColor: const Color(0xFF111827).withValues(alpha: 0.85),
         elevation: 0,
         title: const Text(
           'Member Feedback',
           style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18),
         ),
       ),
-      body: SingleChildScrollView(
+      child: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,

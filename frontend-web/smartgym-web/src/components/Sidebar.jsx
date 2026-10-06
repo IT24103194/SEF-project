@@ -25,8 +25,30 @@ import {
 } from 'lucide-react';
 
 export const Sidebar = () => {
-  const { role } = useSelector((state) => state.auth);
-  const userRole = (role || 'ADMIN').toUpperCase();
+  const { role, user } = useSelector((state) => state.auth);
+
+  const rolesList = [
+    ...(role ? [role] : []),
+    ...(Array.isArray(user?.roles) ? user.roles : []),
+    ...(user?.role ? [user.role] : []),
+  ].map((r) => String(r).toUpperCase());
+
+  const hasRoleAccess = (allowedRoles) => {
+    if (!allowedRoles || allowedRoles.length === 0) return true;
+    return allowedRoles.some((allowed) => {
+      const upperAllowed = allowed.toUpperCase();
+      if (upperAllowed === 'ADMIN') {
+        return rolesList.some((r) => r === 'ADMIN' || r === 'FACILITYMANAGER' || r === 'FACILITY_MANAGER');
+      }
+      return rolesList.includes(upperAllowed);
+    });
+  };
+
+  const primaryRole = rolesList.includes('ADMIN') || rolesList.includes('FACILITYMANAGER') || rolesList.includes('FACILITY_MANAGER')
+    ? 'ADMIN'
+    : rolesList.includes('TRAINER')
+    ? 'TRAINER'
+    : 'MEMBER';
 
   const allSections = [
     {
@@ -95,10 +117,10 @@ export const Sidebar = () => {
 
   // Filter sections and items based on role
   const visibleSections = allSections
-    .filter((sec) => sec.roles.includes(userRole))
+    .filter((sec) => hasRoleAccess(sec.roles))
     .map((sec) => ({
       ...sec,
-      items: sec.items.filter((item) => item.roles.includes(userRole)),
+      items: sec.items.filter((item) => hasRoleAccess(item.roles)),
     }))
     .filter((sec) => sec.items.length > 0);
 
@@ -119,7 +141,7 @@ export const Sidebar = () => {
         </div>
         <div>
           <div style={{ fontWeight: 800, fontSize: '1.05rem', letterSpacing: '-0.02em', color: '#ffffff' }}>SmartGym</div>
-          <div style={{ fontSize: '0.725rem', color: 'var(--accent-cyan)', fontWeight: 600 }}>{userRole} CONSOLE</div>
+          <div style={{ fontSize: '0.725rem', color: 'var(--accent-cyan)', fontWeight: 600 }}>{primaryRole} CONSOLE</div>
         </div>
       </div>
 
@@ -170,7 +192,7 @@ export const Sidebar = () => {
 
       <div style={{ padding: '1rem 1.25rem', borderTop: '1px solid var(--border-subtle)', fontSize: '0.725rem', color: 'var(--text-muted)', flexShrink: 0 }}>
         <div>SmartGym Enterprise v1.0</div>
-        <div>Role: <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{userRole}</span></div>
+        <div>Role: <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{primaryRole}</span></div>
       </div>
     </aside>
   );

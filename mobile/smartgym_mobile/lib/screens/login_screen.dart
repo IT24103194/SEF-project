@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/app_button.dart';
+import '../widgets/animated_gym_background.dart'; // Import the new reusable widget
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -10,10 +11,13 @@ class LoginScreen extends ConsumerStatefulWidget {
   ConsumerState<LoginScreen> createState() => _LoginScreenState();
 }
 
+// 1. Removed SingleTickerProviderStateMixin since animation is handled elsewhere
 class _LoginScreenState extends ConsumerState<LoginScreen> {
-  final _emailController = TextEditingController(text: 'member@smartgym.local');
+  final _emailController = TextEditingController(text: 'member@smartgym.com');
   final _passwordController = TextEditingController(text: 'Member123!');
   final _formKey = GlobalKey<FormState>();
+
+  // 2. Removed animation controllers and initState() completely
 
   @override
   void dispose() {
@@ -38,9 +42,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Widget build(BuildContext context) {
     final authState = ref.watch(authProvider);
 
-    return Scaffold(
-      backgroundColor: const Color(0xFF0B0F19),
-      body: SafeArea(
+    // 3. Replace Scaffold and Stack with the new AnimatedGymBackground wrapper
+    return AnimatedGymBackground(
+      child: SafeArea(
         child: Center(
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(24.0),

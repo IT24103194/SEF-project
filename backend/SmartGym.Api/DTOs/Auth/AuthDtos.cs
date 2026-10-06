@@ -65,6 +65,7 @@ public class LogoutRequest
 public class AuthResponse
 {
     public string AccessToken { get; set; } = string.Empty;
+    public string Token => AccessToken;
     public string RefreshToken { get; set; } = string.Empty;
     public string TokenType { get; set; } = "Bearer";
     public int ExpiresIn { get; set; } // seconds
@@ -81,6 +82,7 @@ public class UserDto
     public string? PhoneNumber { get; set; }
     public bool IsActive { get; set; }
     public List<string> Roles { get; set; } = new();
+    public string Role => Roles.FirstOrDefault() ?? "Member";
     public DateTime CreatedAt { get; set; }
 }
 

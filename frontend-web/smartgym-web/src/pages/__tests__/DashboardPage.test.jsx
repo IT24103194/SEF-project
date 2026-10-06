@@ -153,6 +153,10 @@ describe('DashboardPage Component', () => {
     expect(screen.getByText('Facility Resolution & AI')).toBeTruthy();
     expect(screen.getByText('Class Scheduling & Booking')).toBeTruthy();
     expect(screen.getByText('Membership & Goal Tracking')).toBeTruthy();
+
+    await waitFor(() => {
+      expect(reportsApi.getExecutiveDashboard).toHaveBeenCalled();
+    });
   });
 
   it('loads and displays PostgreSQL live executive metrics', async () => {
@@ -187,6 +191,7 @@ describe('DashboardPage Component', () => {
     );
 
     await waitFor(() => {
+      expect(reportsApi.getExecutiveDashboard).toHaveBeenCalled();
       expect(screen.getByText(/Agentic AI Approval Monitoring & Safety Gates/i)).toBeTruthy();
       expect(screen.getByText('RO-1004')).toBeTruthy();
       expect(screen.getByText('$32,000')).toBeTruthy();

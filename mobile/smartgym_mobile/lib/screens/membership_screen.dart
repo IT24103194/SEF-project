@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/membership_model.dart';
 import '../providers/membership_provider.dart';
+import '../widgets/animated_gym_background.dart';
 
 class MembershipScreen extends ConsumerStatefulWidget {
   const MembershipScreen({super.key});
@@ -458,10 +459,9 @@ class _MembershipScreenState extends ConsumerState<MembershipScreen>
     final state = ref.watch(membershipProvider);
     final activeMembership = state.activeMembership;
 
-    return Scaffold(
-      backgroundColor: const Color(0xFF0B0F19),
+    return AnimatedGymBackground(
       appBar: AppBar(
-        backgroundColor: const Color(0xFF111827),
+        backgroundColor: const Color(0xFF111827).withValues(alpha: 0.85),
         elevation: 0,
         title: const Text(
           'Membership & Goals',
@@ -484,7 +484,7 @@ class _MembershipScreenState extends ConsumerState<MembershipScreen>
           ],
         ),
       ),
-      body: state.isLoading
+      child: state.isLoading
           ? const Center(child: CircularProgressIndicator(color: Color(0xFF6366F1)))
           : TabBarView(
               controller: _tabController,

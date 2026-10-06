@@ -713,13 +713,17 @@ public class AIWorkflowsController : ControllerBase
             }
         }
 
+        var issue = workflow.FacilityIssue ?? await _context.FacilityIssues
+            .Include(fi => fi.Equipment)
+            .FirstOrDefaultAsync(fi => fi.Id == workflow.IssueId, cancellationToken);
+
         // 6. Repair order and approval record persistence
         var ro = await _context.RepairOrders
             .FirstOrDefaultAsync(r => r.IssueId == workflow.IssueId, cancellationToken);
 
         if (ro == null)
         {
-            var targetEqId = workflow.FacilityIssue?.EquipmentId;
+            var targetEqId = issue?.EquipmentId;
             if (!targetEqId.HasValue || targetEqId.Value == Guid.Empty)
             {
                 targetEqId = await _context.Equipment.Select(e => e.Id).FirstOrDefaultAsync(cancellationToken);
@@ -787,9 +791,9 @@ public class AIWorkflowsController : ControllerBase
             workflow.CompletedAt = DateTime.UtcNow;
             approvalStatusStr = "APPROVED";
 
-            if (workflow.FacilityIssue != null)
+            if (issue != null)
             {
-                workflow.FacilityIssue.Status = FacilityIssueStatus.REPAIR_SCHEDULED;
+                issue.Status = FacilityIssueStatus.REPAIR_SCHEDULED;
             }
 
             // 1. Dispatch supplier repair request via transactional email service
@@ -803,9 +807,9 @@ public class AIWorkflowsController : ControllerBase
                         RepairOrderNumber = ro.OrderNumber,
                         SupplierEmail = "repairs@supplier.com",
                         SupplierName = "Apex Fitness Equipment Suppliers",
-                        EquipmentName = workflow.FacilityIssue?.Equipment?.Name ?? "Gym Equipment",
-                        SerialNumber = workflow.FacilityIssue?.Equipment?.SerialNumber ?? "SN-UNKNOWN",
-                        IssueDescription = workflow.FacilityIssue?.Description ?? "Facility issue repair request",
+                        EquipmentName = issue?.Equipment?.Name ?? "Gym Equipment",
+                        SerialNumber = issue?.Equipment?.SerialNumber ?? "SN-UNKNOWN",
+                        IssueDescription = issue?.Description ?? "Facility issue repair request",
                         EstimatedCost = ro.EstimatedCost > 0 ? ro.EstimatedCost : 12500.0m,
                         ApprovalStatus = "APPROVED",
                         IdempotencyKey = $"supp-req-{workflow.Id}-{ro.Id}"
@@ -853,11 +857,11 @@ public class AIWorkflowsController : ControllerBase
             }
 
             // 2. Create in-app notification for the reporting member
-            if (workflow.FacilityIssue != null)
+            if (issue != null)
             {
                 var member = await _context.Members
                     .AsNoTracking()
-                    .FirstOrDefaultAsync(m => m.Id == workflow.FacilityIssue.ReportedByMemberId, cancellationToken);
+                    .FirstOrDefaultAsync(m => m.Id == issue.ReportedByMemberId, cancellationToken);
 
                 if (member != null)
                 {
@@ -865,7 +869,7 @@ public class AIWorkflowsController : ControllerBase
                     {
                         UserId = member.UserId,
                         Title = "Repair Scheduled for Reported Issue",
-                        Message = $"Your report for {workflow.FacilityIssue.Equipment?.Name ?? "Gym Equipment"} has been approved and repair has been scheduled with the supplier.",
+                        Message = $"Your report for {issue.Equipment?.Name ?? "Gym Equipment"} has been approved and repair has been scheduled with the supplier.",
                         Type = NotificationType.Maintenance,
                         IsRead = false,
                         CreatedAt = DateTime.UtcNow
@@ -880,9 +884,9 @@ public class AIWorkflowsController : ControllerBase
             workflow.Status = AIWorkflowStatus.Failed;
             workflow.CurrentStep = "Workflow rejected by human reviewer";
             approvalStatusStr = "REJECTED";
-            if (workflow.FacilityIssue != null)
+            if (issue != null)
             {
-                workflow.FacilityIssue.Status = FacilityIssueStatus.REJECTED;
+                issue.Status = FacilityIssueStatus.REJECTED;
             }
         }
         else // REQUEST REVISION
@@ -891,9 +895,9 @@ public class AIWorkflowsController : ControllerBase
             workflow.Status = AIWorkflowStatus.Planning;
             workflow.CurrentStep = "Revision requested by human reviewer";
             approvalStatusStr = "REVISION_REQUIRED";
-            if (workflow.FacilityIssue != null)
+            if (issue != null)
             {
-                workflow.FacilityIssue.Status = FacilityIssueStatus.REVISION_REQUIRED;
+                issue.Status = FacilityIssueStatus.REVISION_REQUIRED;
             }
         }
 

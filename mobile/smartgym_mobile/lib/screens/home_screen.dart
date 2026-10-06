@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/auth_provider.dart';
 import '../providers/notification_provider.dart';
+import '../widgets/animated_gym_background.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -13,10 +14,9 @@ class HomeScreen extends ConsumerWidget {
     final unreadCount = ref.watch(notificationProvider.select((s) => s.unreadCount));
     final isTrainer = user?.isTrainer ?? false;
 
-    return Scaffold(
-      backgroundColor: const Color(0xFF0B0F19),
+    return AnimatedGymBackground(
       appBar: AppBar(
-        backgroundColor: const Color(0xFF111827),
+        backgroundColor: const Color(0xFF111827).withValues(alpha: 0.85),
         elevation: 0,
         title: Row(
           children: [
@@ -83,7 +83,7 @@ class HomeScreen extends ConsumerWidget {
           ),
         ],
       ),
-      body: SingleChildScrollView(
+      child: SingleChildScrollView(
         padding: const EdgeInsets.all(20.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,

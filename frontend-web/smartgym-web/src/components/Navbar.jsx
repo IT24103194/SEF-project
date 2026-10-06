@@ -33,8 +33,8 @@ export const Navbar = () => {
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <User size={18} color="var(--text-secondary)" />
-              <span style={{ fontSize: '0.875rem', fontWeight: 600 }}>{user?.username || 'Admin'}</span>
-              <span className="badge badge-warning">{role || 'ADMIN'}</span>
+              <span style={{ fontSize: '0.875rem', fontWeight: 600 }}>{user?.fullName || user?.firstName || user?.email || 'Admin'}</span>
+              <span className="badge badge-warning">{role || 'MEMBER'}</span>
             </div>
             <button
               onClick={() => dispatch(logout())}

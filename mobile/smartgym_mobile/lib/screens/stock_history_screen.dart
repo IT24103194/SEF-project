@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/inventory_models.dart';
 import '../services/inventory_api_service.dart';
+import '../widgets/animated_gym_background.dart';
 
 class StockHistoryScreen extends StatefulWidget {
   final InventoryItem item;
@@ -36,10 +37,9 @@ class _StockHistoryScreenState extends State<StockHistoryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF0B0F19),
+    return AnimatedGymBackground(
       appBar: AppBar(
-        backgroundColor: const Color(0xFF111827),
+        backgroundColor: const Color(0xFF111827).withValues(alpha: 0.85),
         elevation: 0,
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -61,7 +61,7 @@ class _StockHistoryScreenState extends State<StockHistoryScreen> {
           ),
         ],
       ),
-      body: FutureBuilder<List<StockMovement>>(
+      child: FutureBuilder<List<StockMovement>>(
         future: _historyFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {

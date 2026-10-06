@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/facility_issue_model.dart';
 import '../services/facility_api_service.dart';
+import '../widgets/animated_gym_background.dart';
 
 class FacilityIssueDetailScreen extends ConsumerStatefulWidget {
   final String issueId;
@@ -83,10 +84,9 @@ class _FacilityIssueDetailScreenState extends ConsumerState<FacilityIssueDetailS
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF0B0F19),
+    return AnimatedGymBackground(
       appBar: AppBar(
-        backgroundColor: const Color(0xFF111827),
+        backgroundColor: const Color(0xFF111827).withValues(alpha: 0.85),
         elevation: 0,
         title: const Text('Issue Tracking Details'),
         actions: [
@@ -96,7 +96,7 @@ class _FacilityIssueDetailScreenState extends ConsumerState<FacilityIssueDetailS
           ),
         ],
       ),
-      body: _isLoading
+      child: _isLoading
           ? const Center(child: CircularProgressIndicator(color: Color(0xFF6366F1)))
           : _error != null || _issue == null
               ? Center(

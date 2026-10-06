@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import '../models/facility_issue_model.dart';
 import '../services/facility_api_service.dart';
 import '../widgets/app_button.dart';
+import '../widgets/animated_gym_background.dart';
 
 class FacilityReportScreen extends ConsumerStatefulWidget {
   const FacilityReportScreen({super.key});
@@ -155,14 +156,13 @@ class _FacilityReportScreenState extends ConsumerState<FacilityReportScreen> {
         ? _equipmentList
         : _equipmentList.where((e) => e.locationId == _selectedLocationId).toList();
 
-    return Scaffold(
-      backgroundColor: const Color(0xFF0B0F19),
+    return AnimatedGymBackground(
       appBar: AppBar(
-        backgroundColor: const Color(0xFF111827),
+        backgroundColor: const Color(0xFF111827).withValues(alpha: 0.85),
         elevation: 0,
         title: const Text('Report Equipment Issue'),
       ),
-      body: _isLoadingLocations
+      child: _isLoadingLocations
           ? const Center(child: CircularProgressIndicator(color: Color(0xFF6366F1)))
           : SingleChildScrollView(
               padding: const EdgeInsets.all(20),

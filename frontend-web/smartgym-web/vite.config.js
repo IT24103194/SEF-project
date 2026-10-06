@@ -9,6 +9,7 @@ export default defineConfig({
     environment: 'jsdom',
     pool: 'forks',
     isolate: true,
+    setupFiles: ['./src/setupTests.js'],
   },
   server: {
     port: 3000,

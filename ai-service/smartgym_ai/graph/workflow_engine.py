@@ -525,7 +525,9 @@ class WorkflowEngine:
         action = resume_request.action.lower()
         if action == "approve":
             state.human_approval_granted = True
-            state.status = WorkflowStatus.Executing
+            state.status = WorkflowStatus.Completed
+            state.current_step = "Workflow approved by manager. Action executed."
+            state.completed_at = datetime.now(timezone.utc)
             state.validation_results.append(
                 ValidationResultRecord(
                     rule_name="HumanApprovalGate",
@@ -533,9 +535,12 @@ class WorkflowEngine:
                     validation_message=f"Approved: {resume_request.comments or 'Cost approved by manager.'}"
                 )
             )
+            return self.store.update(state)
+
         elif action == "reject":
             state.human_approval_granted = False
             state.status = WorkflowStatus.Rejected
+            state.current_step = "Workflow rejected by manager."
             state.completed_at = datetime.now(timezone.utc)
             state.validation_results.append(
                 ValidationResultRecord(
@@ -546,34 +551,19 @@ class WorkflowEngine:
             )
             return self.store.update(state)
 
-        # Resume through LangGraph
-        graph_input: WorkflowGraphState = {
-            "workflow_id": str(state.id),
-            "correlation_id": state.correlation_id,
-            "issue_id": str(state.issue_id),
-            "issue_title": state.issue_title,
-            "equipment_name": state.equipment_name,
-            "description": state.diagnosis_summary,
-            "status": state.status.value,
-            "current_step": "Action Execution",
-            "estimated_cost": state.estimated_cost or 0.0,
-            "requires_human_approval": state.requires_human_approval,
-            "human_approval_granted": state.human_approval_granted,
-            "diagnosis_summary": state.diagnosis_summary,
-            "recommended_action": state.recommended_action,
-            "error_details": None,
-            "structured_output": state.structured_output or {},
-            "objective": f"Resume resolution for {state.equipment_name}",
-            "plan_id": state.structured_output.get("plan_id") if state.structured_output else None,
-            "planned_steps": state.structured_output.get("planned_steps", []) if state.structured_output else [],
-            "assigned_agent": state.structured_output.get("assigned_agent") if state.structured_output else None,
-            "next_agent": "ActionExecutionAgent",
-            "next_step": "Action Execution",
-            "planning_reason": None,
-        }
+        elif action in ("revise", "revision"):
+            state.human_approval_granted = None
+            state.status = WorkflowStatus.Planning
+            state.current_step = "Revision requested by human reviewer"
+            state.validation_results.append(
+                ValidationResultRecord(
+                    rule_name="HumanApprovalGate",
+                    passed=False,
+                    validation_message=f"Revision Requested: {resume_request.comments or 'Need additional quotes or clarification.'}"
+                )
+            )
+            return self.store.update(state)
 
-        output = await self.graph.ainvoke(graph_input)
-        self._sync_graph_output_to_state(state, output)
         return self.store.update(state)
 
     async def cancel_workflow(self, workflow_id: UUID, reason: Optional[str] = None) -> WorkflowState:

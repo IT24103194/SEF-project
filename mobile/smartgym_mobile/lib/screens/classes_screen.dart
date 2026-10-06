@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/class_schedule_model.dart';
 import '../providers/class_provider.dart';
+import '../widgets/animated_gym_background.dart';
 
 class ClassesScreen extends ConsumerStatefulWidget {
   const ClassesScreen({super.key});
@@ -174,10 +175,9 @@ class _ClassesScreenState extends ConsumerState<ClassesScreen> with SingleTicker
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF0B0F19),
+    return AnimatedGymBackground(
       appBar: AppBar(
-        backgroundColor: const Color(0xFF111827),
+        backgroundColor: const Color(0xFF111827).withValues(alpha: 0.85),
         elevation: 0,
         title: const Text('Fitness Classes', style: TextStyle(fontWeight: FontWeight.bold)),
         actions: [
@@ -199,7 +199,7 @@ class _ClassesScreenState extends ConsumerState<ClassesScreen> with SingleTicker
           ],
         ),
       ),
-      body: _isActionInProgress
+      child: _isActionInProgress
           ? const Center(child: CircularProgressIndicator(color: Color(0xFF6366F1)))
           : TabBarView(
               controller: _tabController,

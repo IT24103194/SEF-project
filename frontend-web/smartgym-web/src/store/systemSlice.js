@@ -5,7 +5,7 @@ export const fetchSystemInfo = createAsyncThunk(
   'system/fetchInfo',
   async (_, { rejectWithValue }) => {
     try {
-      const response = await apiClient.get('/api/system/info');
+      const response = await apiClient.get('/system/info');
       return response.data;
     } catch (err) {
       return rejectWithValue(err.message || 'Failed to connect to SmartGym API');

@@ -4,6 +4,7 @@ import '../models/class_schedule_model.dart';
 import '../models/trainer_models.dart';
 import '../providers/trainer_provider.dart';
 import '../services/trainer_api_service.dart';
+import '../widgets/animated_gym_background.dart';
 
 class TrainerDashboardScreen extends ConsumerStatefulWidget {
   const TrainerDashboardScreen({super.key});
@@ -75,10 +76,9 @@ class _TrainerDashboardScreenState extends ConsumerState<TrainerDashboardScreen>
   Widget build(BuildContext context) {
     final schedulesAsync = ref.watch(trainerSchedulesProvider);
 
-    return Scaffold(
-      backgroundColor: const Color(0xFF0B0F19),
+    return AnimatedGymBackground(
       appBar: AppBar(
-        backgroundColor: const Color(0xFF111827),
+        backgroundColor: const Color(0xFF111827).withValues(alpha: 0.85),
         elevation: 0,
         title: const Text(
           'Trainer Station',
@@ -106,7 +106,7 @@ class _TrainerDashboardScreenState extends ConsumerState<TrainerDashboardScreen>
           ],
         ),
       ),
-      body: TabBarView(
+      child: TabBarView(
         controller: _tabController,
         children: [
           // TAB 1: Assigned Classes & Schedules
